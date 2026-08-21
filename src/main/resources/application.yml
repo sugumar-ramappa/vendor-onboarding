@@ -75,6 +75,12 @@ onboarding:
     min-certificate-validity-days: 30
     # Public liability cover required, in GBP.
     min-public-liability: 5000000
+  intake:
+    # Bounds at the boundary. A vendor uploads these files, so nothing stops a
+    # 2GB PDF arriving - and by the time it reaches an agent the memory is gone.
+    max-file-bytes: 20971520     # 20 MB
+    max-pages: 200
+
   limits:
     # Caps that stop a crafted document driving an expensive agent loop.
     max-graph-steps: 20
