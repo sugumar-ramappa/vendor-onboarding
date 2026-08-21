@@ -1,7 +1,7 @@
 package com.learning.onboarding.graph;
 
 import com.learning.onboarding.agents.ReviewContext;
-import com.learning.onboarding.agents.ReviewModel;
+import com.learning.onboarding.agents.ReviewOutcome;
 import com.learning.onboarding.agents.ReviewerAgent;
 import com.learning.onboarding.domain.Conflict;
 import org.bsc.langgraph4j.CompiledGraph;
@@ -171,14 +171,24 @@ public class ReviewGraph {
                     ReviewState.TRACE, area + " (interrupted)");
         }
         try {
-            return Map.of(
-                    ReviewState.FINDINGS, reviewer.review(state.context()),
-                    ReviewState.TRACE, area);
-        } catch (ReviewModel.ReviewModelException e) {
+            ReviewOutcome outcome = reviewer.review(state.context());
+
+            // The audit entry is recorded whether the call succeeded or not.
+            // A failed call is a fact worth keeping - it is the evidence that
+            // this application was not fully reviewed.
+            if (outcome.succeeded()) {
+                return Map.of(
+                        ReviewState.FINDINGS, outcome.findings(),
+                        ReviewState.AUDIT, outcome.audit(),
+                        ReviewState.TRACE, area);
+            }
             log.warn("{} reviewer failed for {}: {}",
-                    area, state.applicationId(), e.getMessage());
+                    area, state.applicationId(), outcome.audit().failureDetail());
             return Map.of(
-                    ReviewState.FAILURES, area + ": " + e.getMessage(),
+                    ReviewState.FAILURES,
+                    area + ": " + outcome.audit().outcome() + " - "
+                            + outcome.audit().failureDetail(),
+                    ReviewState.AUDIT, outcome.audit(),
                     ReviewState.TRACE, area + " (failed)");
         } finally {
             limit.release();

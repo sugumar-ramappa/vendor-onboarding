@@ -1,6 +1,7 @@
 package com.learning.onboarding.agents;
 
 import com.learning.onboarding.domain.AgentFinding;
+import com.learning.onboarding.domain.AuditEntry;
 import com.learning.onboarding.domain.FindingSource;
 import com.learning.onboarding.domain.ReviewArea;
 import com.learning.onboarding.domain.ReviewFinding;
@@ -60,21 +61,41 @@ public class ReviewerAgent {
     }
 
     /**
-     * @throws ReviewModel.ReviewModelException if the model could not answer.
-     *         Deliberately propagated rather than swallowed: the caller must
-     *         escalate to a human, because "the reviewer failed" and "the
-     *         reviewer found nothing" are different facts that look identical
-     *         once one is turned into an empty list.
+     * Runs the review and records the call.
+     *
+     * <p>A failed call returns an outcome carrying a failed {@link AuditEntry}
+     * rather than throwing. That is deliberate: the failure is a fact worth
+     * recording, and the caller needs it in order to distinguish "nobody looked"
+     * from "looked and found nothing". Throwing would lose it unless every
+     * caller remembered to catch and record, which is exactly the kind of thing
+     * that gets forgotten.
      */
-    public List<ReviewFinding> review(ReviewContext context) {
+    public ReviewOutcome review(ReviewContext context) {
         UUID callId = UUID.randomUUID();
         String systemPrompt = prompts.get(promptVersion);
         String userPrompt = context.render();
+        // The whole prompt, so the audit record can reproduce the call. Both
+        // halves matter: the instructions AND the spotlighted documents.
+        String fullPrompt = systemPrompt + "\n\n---\n\n" + userPrompt;
 
+        Instant startedAt = Instant.now();
         long start = System.currentTimeMillis();
-        List<AgentFinding> proposed = model.review(systemPrompt, userPrompt);
-        long elapsed = System.currentTimeMillis() - start;
 
+        List<AgentFinding> proposed;
+        try {
+            proposed = model.review(systemPrompt, userPrompt);
+        } catch (ReviewModel.ReviewModelException e) {
+            long elapsed = System.currentTimeMillis() - start;
+            log.warn("{} failed for {} after {}ms: {}",
+                    area, context.applicationId(), elapsed, e.getMessage());
+
+            return new ReviewOutcome(List.of(), AuditEntry.failed(
+                    callId, context.applicationId(), area.name().toLowerCase(),
+                    promptVersion, model.modelName(), fullPrompt, elapsed,
+                    classify(e), e.getMessage(), startedAt));
+        }
+
+        long elapsed = System.currentTimeMillis() - start;
         log.info("{} reviewed {} in {}ms, {} finding(s), prompt {}",
                 area, context.applicationId(), elapsed, proposed.size(), promptVersion);
 
@@ -91,6 +112,53 @@ public class ReviewerAgent {
                     proposed.get(i),
                     source));      // set HERE, not by the model
         }
-        return findings;
+
+        return new ReviewOutcome(findings, AuditEntry.ok(
+                callId, context.applicationId(), area.name().toLowerCase(),
+                promptVersion, model.modelName(), fullPrompt,
+                summarise(findings), elapsed, startedAt));
+    }
+
+    /**
+     * A rate limit clears on its own; an unreachable model may not. The caller
+     * reacts differently to each, so they are not collapsed into "failed".
+     */
+    private static AuditEntry.Outcome classify(ReviewModel.ReviewModelException e) {
+        String message = String.valueOf(e.getMessage()).toLowerCase();
+        Throwable cause = e.getCause();
+        String causeMessage = cause == null ? "" : String.valueOf(cause.getMessage()).toLowerCase();
+        String all = message + " " + causeMessage;
+
+        if (all.contains("rate") || all.contains("quota") || all.contains("429")
+                || all.contains("resource_exhausted")) {
+            return AuditEntry.Outcome.RATE_LIMITED;
+        }
+        if (all.contains("parse") || all.contains("bind") || all.contains("json")) {
+            return AuditEntry.Outcome.MALFORMED;
+        }
+        return AuditEntry.Outcome.UNAVAILABLE;
+    }
+
+    /**
+     * The response as recorded.
+     *
+     * <p>Deliberately the structured findings rather than raw model text: the
+     * findings are what the system acted on, and the raw text before binding is
+     * not something anyone would read.
+     */
+    private static String summarise(List<ReviewFinding> findings) {
+        if (findings.isEmpty()) {
+            return "no findings";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (ReviewFinding f : findings) {
+            sb.append('[').append(f.severity()).append("] ")
+              .append(f.problem());
+            if (f.details().isSkuSpecific()) {
+                sb.append("  (SKU ").append(f.details().skuRef()).append(')');
+            }
+            sb.append('\n');
+        }
+        return sb.toString();
     }
 }

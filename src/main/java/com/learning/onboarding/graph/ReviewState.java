@@ -1,6 +1,7 @@
 package com.learning.onboarding.graph;
 
 import com.learning.onboarding.agents.ReviewContext;
+import com.learning.onboarding.domain.AuditEntry;
 import com.learning.onboarding.domain.Conflict;
 import com.learning.onboarding.domain.ReviewFinding;
 import org.bsc.langgraph4j.state.AgentState;
@@ -45,6 +46,7 @@ public class ReviewState extends AgentState {
     public static final String FINDINGS = "findings";
     public static final String FAILURES = "failures";
     public static final String CONFLICTS = "conflicts";
+    public static final String AUDIT = "audit";
     public static final String TRACE = "trace";
 
     /** Declares how each key merges. Keys absent from this map replace on write. */
@@ -52,6 +54,7 @@ public class ReviewState extends AgentState {
             FINDINGS, Channels.<ReviewFinding>appenderWithDuplicate(List::of),
             FAILURES, Channels.<String>appenderWithDuplicate(List::of),
             CONFLICTS, Channels.<Conflict>appenderWithDuplicate(List::of),
+            AUDIT, Channels.<AuditEntry>appenderWithDuplicate(List::of),
             TRACE, Channels.<String>appenderWithDuplicate(List::of)
     );
 
@@ -82,6 +85,16 @@ public class ReviewState extends AgentState {
      */
     public List<Conflict> conflicts() {
         return this.<List<Conflict>>value(CONFLICTS).orElseGet(List::of);
+    }
+
+    /**
+     * Every model call made during this review, successful or not.
+     *
+     * <p>This is what makes a finding explainable. Given one, its callId leads
+     * here, and here is the exact prompt and response.
+     */
+    public List<AuditEntry> audit() {
+        return this.<List<AuditEntry>>value(AUDIT).orElseGet(List::of);
     }
 
     /** Reviewers that could not run. Not the same as reviewers that found nothing. */

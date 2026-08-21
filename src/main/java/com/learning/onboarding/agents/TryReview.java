@@ -110,7 +110,8 @@ public class TryReview implements CommandLineRunner {
 
         System.out.println("\n=== compliance review: Acme Tools Ltd / POWER_TOOLS ===\n");
 
-        List<ReviewFinding> findings = compliance.review(context);
+        ReviewOutcome outcome = compliance.review(context);
+        List<ReviewFinding> findings = outcome.findings();
 
         if (findings.isEmpty()) {
             System.out.println("  no findings\n");
@@ -125,8 +126,8 @@ public class TryReview implements CommandLineRunner {
             System.out.println();
         }
 
-        System.out.printf("  prompt %s, model %s%n%n",
-                findings.isEmpty() ? "-" : findings.getFirst().source().promptVersion(),
-                findings.isEmpty() ? "-" : findings.getFirst().source().modelName());
+        System.out.printf("  %s in %dms, prompt %s, model %s%n%n",
+                outcome.audit().outcome(), outcome.audit().latencyMs(),
+                outcome.audit().promptVersion(), outcome.audit().modelName());
     }
 }

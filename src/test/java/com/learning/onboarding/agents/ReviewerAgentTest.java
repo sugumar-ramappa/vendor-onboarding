@@ -182,7 +182,7 @@ class ReviewerAgentTest {
             stub.toReturn = List.of(finding());
 
             var findings = new ReviewerAgent(ReviewArea.QUALITY, "quality-v1", prompts, stub)
-                    .review(context(CERT_TEXT));
+                    .review(context(CERT_TEXT)).findings();
 
             assertEquals(ReviewArea.QUALITY, findings.getFirst().area(),
                     "a reviewer must not be able to label its output as another area");
@@ -195,7 +195,7 @@ class ReviewerAgentTest {
             stub.toReturn = List.of(finding());
 
             var source = new ReviewerAgent(ReviewArea.COMPLIANCE, "compliance-v1", prompts, stub)
-                    .review(context(CERT_TEXT)).getFirst().source();
+                    .review(context(CERT_TEXT)).findings().getFirst().source();
 
             assertEquals("compliance-v1", source.promptVersion());
             assertEquals("stub-model-1", source.modelName());
@@ -209,7 +209,7 @@ class ReviewerAgentTest {
             stub.toReturn = List.of(finding());
 
             var f = new ReviewerAgent(ReviewArea.COMPLIANCE, "compliance-v1", prompts, stub)
-                    .review(context(CERT_TEXT)).getFirst();
+                    .review(context(CERT_TEXT)).findings().getFirst();
 
             assertNull(f.verdict());
             assertTrue(f.survives(), "a finding nobody has challenged yet must still be shown");
@@ -221,17 +221,39 @@ class ReviewerAgentTest {
     class Failure {
 
         @Test
-        @DisplayName("a model failure propagates instead of becoming no findings")
-        void modelFailureIsNotAnEmptyResult() {
+        @DisplayName("a model failure is recorded, not turned into no findings")
+        void modelFailureIsRecorded() {
             var stub = new StubModel();
             stub.toThrow = new ReviewModel.ReviewModelException("rate limited", null);
 
-            var agent = new ReviewerAgent(ReviewArea.COMPLIANCE, "compliance-v1", prompts, stub);
+            var outcome = new ReviewerAgent(ReviewArea.COMPLIANCE, "compliance-v1", prompts, stub)
+                    .review(context(CERT_TEXT));
 
-            assertThrows(ReviewModel.ReviewModelException.class,
-                    () -> agent.review(context(CERT_TEXT)),
+            assertFalse(outcome.succeeded(),
                     "'the reviewer failed' and 'the reviewer found nothing' must not "
                             + "look identical - collapsing them is how a system fails open");
+            assertTrue(outcome.findings().isEmpty());
+            assertEquals(AuditEntry.Outcome.RATE_LIMITED, outcome.audit().outcome(),
+                    "a rate limit clears on its own; an unreachable model may not, "
+                            + "so they are not collapsed into 'failed'");
+        }
+
+        @Test
+        @DisplayName("a successful call is recorded with the prompt that produced it")
+        void successIsAudited() {
+            var stub = new StubModel();
+            stub.toReturn = List.of(finding());
+
+            var audit = new ReviewerAgent(ReviewArea.COMPLIANCE, "compliance-v1", prompts, stub)
+                    .review(context(CERT_TEXT)).audit();
+
+            assertEquals(AuditEntry.Outcome.OK, audit.outcome());
+            assertEquals("compliance-v1", audit.promptVersion());
+            assertTrue(audit.promptText().contains("compliance reviewer"),
+                    "the audit must carry the instructions, not just the documents");
+            assertTrue(audit.promptText().contains("<untrusted"),
+                    "and the documents as the model actually saw them");
+            assertTrue(audit.latencyMs() >= 0);
         }
 
         @Test
