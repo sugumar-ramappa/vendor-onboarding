@@ -1,5 +1,7 @@
 package com.learning.onboarding.domain;
 
+import java.io.Serializable;
+
 /**
  * One document from the vendor's pack, after text extraction.
  *
@@ -27,7 +29,7 @@ public record SubmittedDocument(
         DocumentType type,
         String text,
         Integer pageCount
-) {
+) implements Serializable {
 
     public SubmittedDocument {
         if (documentId == null || documentId.isBlank()) {

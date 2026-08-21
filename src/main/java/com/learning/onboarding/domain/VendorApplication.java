@@ -1,5 +1,6 @@
 package com.learning.onboarding.domain;
 
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.List;
 
@@ -30,7 +31,7 @@ public record VendorApplication(
         Instant requestedGoLive,
         List<Sku> skus,
         List<SubmittedDocument> documents
-) {
+) implements Serializable {
 
     public VendorApplication {
         if (applicationId == null || applicationId.isBlank()) {

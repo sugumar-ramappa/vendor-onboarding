@@ -1,5 +1,6 @@
 package com.learning.onboarding.domain;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 
 /**
@@ -37,7 +38,7 @@ public record Sku(
         int casePack,
         BigDecimal caseWeightKg,
         boolean hazardous
-) {
+) implements Serializable {
 
     /**
      * Above this, a case cannot be lifted by one person at a store without

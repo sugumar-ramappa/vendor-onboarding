@@ -44,27 +44,27 @@ class GraphSpikeTest {
 
         CompiledGraph<ReviewState> graph = new StateGraph<>(ReviewState.SCHEMA, ReviewState::new)
                 .addNode("compliance", node_async(state -> Map.of(
-                        ReviewState.FINDINGS, "compliance: certificate expired",
+                        ReviewState.FAILURES, "compliance: certificate expired",
                         ReviewState.TRACE, "compliance")))
                 .addNode("quality", node_async(state -> Map.of(
-                        ReviewState.FINDINGS, "quality: two open non-conformances",
+                        ReviewState.FAILURES, "quality: two open non-conformances",
                         ReviewState.TRACE, "quality")))
                 .addEdge(START, "compliance")
                 .addEdge("compliance", "quality")
                 .addEdge("quality", END)
                 .compile();
 
-        Optional<ReviewState> result = graph.invoke(Map.of(ReviewState.APPLICATION_ID, "APP-001"));
+        Optional<ReviewState> result = graph.invoke(Map.of("marker", "APP-001"));
 
         assertTrue(result.isPresent(), "graph produced no final state");
         ReviewState finalState = result.get();
 
-        assertEquals("APP-001", finalState.applicationId(),
+        assertEquals("APP-001", finalState.<String>value("marker").orElseThrow(),
                 "input state did not survive to the end of the graph");
 
         // The assertion that matters. Without the AppenderChannel this is 1.
-        assertEquals(2, finalState.findings().size(),
-                "findings were overwritten instead of accumulated - check ReviewState.SCHEMA");
+        assertEquals(2, finalState.failures().size(),
+                "values were overwritten instead of accumulated - check ReviewState.SCHEMA");
 
         assertEquals(List.of("compliance", "quality"), finalState.trace(),
                 "nodes did not run in the expected order");
@@ -77,17 +77,13 @@ class GraphSpikeTest {
         CompiledGraph<ReviewState> graph = buildBranchingGraph();
 
         // Path A: nothing blocking, so verification is skipped.
-        ReviewState clean = graph.invoke(Map.of(
-                ReviewState.APPLICATION_ID, "APP-CLEAN",
-                "blocking", false)).orElseThrow();
+        ReviewState clean = graph.invoke(Map.of("blocking", false)).orElseThrow();
 
         assertEquals(List.of("triage"), clean.trace(),
                 "clean application should not reach the verifier");
 
         // Path B: something blocking, so the verifier runs.
-        ReviewState flagged = graph.invoke(Map.of(
-                ReviewState.APPLICATION_ID, "APP-FLAGGED",
-                "blocking", true)).orElseThrow();
+        ReviewState flagged = graph.invoke(Map.of("blocking", true)).orElseThrow();
 
         assertEquals(List.of("triage", "verify"), flagged.trace(),
                 "blocking finding should route through the verifier");

@@ -1,5 +1,6 @@
 package com.learning.onboarding.agents;
 
+import java.io.Serializable;
 import com.learning.onboarding.domain.SubmittedDocument;
 import com.learning.onboarding.domain.VendorApplication;
 import com.learning.onboarding.intake.DocumentFacts;
@@ -34,7 +35,7 @@ public record ReviewContext(
         List<SubmittedDocument> documents,
         Map<String, DocumentFacts> facts,
         Map<String, ExtractionSource> sources
-) {
+) implements Serializable {
 
     public ReviewContext {
         documents = documents == null ? List.of() : List.copyOf(documents);

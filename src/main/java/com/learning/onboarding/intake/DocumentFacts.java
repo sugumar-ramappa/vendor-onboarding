@@ -1,5 +1,6 @@
 package com.learning.onboarding.intake;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -24,31 +25,45 @@ import java.util.Optional;
  * these can cite itself - and that citation is groundable by construction. See
  * {@link ParsedValue}.
  *
- * @param expiry       when the certificate stops being valid
- * @param issued       when it was issued
+ * @param expiryValue  when the certificate stops being valid; may be null
+ * @param issuedValue  when it was issued; may be null
  * @param standards    standards referenced, e.g. "EN 62841"
  * @param amounts      monetary amounts, e.g. insurance cover
  * @param referenceIds certificate or policy numbers
  */
 public record DocumentFacts(
-        Optional<ParsedValue<LocalDate>> expiry,
-        Optional<ParsedValue<LocalDate>> issued,
+        ParsedValue<LocalDate> expiryValue,
+        ParsedValue<LocalDate> issuedValue,
         List<ParsedValue<String>> standards,
         List<ParsedValue<BigDecimal>> amounts,
         List<ParsedValue<String>> referenceIds
-) {
+) implements Serializable {
 
     public DocumentFacts {
-        expiry = expiry == null ? Optional.empty() : expiry;
-        issued = issued == null ? Optional.empty() : issued;
         standards = standards == null ? List.of() : List.copyOf(standards);
         amounts = amounts == null ? List.of() : List.copyOf(amounts);
         referenceIds = referenceIds == null ? List.of() : List.copyOf(referenceIds);
     }
 
+    /**
+     * Nullable components with Optional accessors, rather than Optional
+     * components.
+     *
+     * <p>Two reasons. Optional is not Serializable, and graph state has to
+     * serialize for checkpointing - which is what lets a review pause for a
+     * human decision and resume. And using Optional as a field is against the
+     * documented guidance for it anyway; it is a return type.
+     */
+    public Optional<ParsedValue<LocalDate>> expiry() {
+        return Optional.ofNullable(expiryValue);
+    }
+
+    public Optional<ParsedValue<LocalDate>> issued() {
+        return Optional.ofNullable(issuedValue);
+    }
+
     public static DocumentFacts none() {
-        return new DocumentFacts(Optional.empty(), Optional.empty(),
-                List.of(), List.of(), List.of());
+        return new DocumentFacts(null, null, List.of(), List.of(), List.of());
     }
 
     /**
@@ -60,7 +75,7 @@ public record DocumentFacts(
      * the fail-open behaviour this project avoids.
      */
     public Optional<Boolean> expiredBy(LocalDate date) {
-        return expiry.map(e -> e.value().isBefore(date));
+        return expiry().map(e -> e.value().isBefore(date));
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.learning.onboarding.domain;
 
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -33,7 +34,7 @@ public record FindingSource(
         String promptVersion,
         String modelName,
         Instant calledAt
-) {
+) implements Serializable {
 
     public FindingSource {
         if (callId == null) {

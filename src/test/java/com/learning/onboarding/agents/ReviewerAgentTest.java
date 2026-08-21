@@ -82,7 +82,7 @@ class ReviewerAgentTest {
                 "certificate scope does not cover cordless drills",
                 List.of(new Evidence("elec-cert.pdf", 1,
                         "Scope: hand tools and non-powered garden implements")),
-                CheckType.SEMANTIC, 0.85);
+                CheckType.SEMANTIC, 0.85, null);
     }
 
     @Nested

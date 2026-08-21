@@ -1,5 +1,6 @@
 package com.learning.onboarding.domain;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -24,7 +25,7 @@ public record Verdict(
         boolean disproved,
         String reason,
         List<Evidence> evidence
-) {
+) implements Serializable {
 
     public Verdict {
         if (reason == null || reason.isBlank()) {

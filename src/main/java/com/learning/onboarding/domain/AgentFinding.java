@@ -1,5 +1,6 @@
 package com.learning.onboarding.domain;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -35,14 +36,20 @@ import java.util.List;
  * @param evidence   citations into the submitted pack; must not be empty
  * @param checkType  arithmetic or judgement - see {@link CheckType}
  * @param confidence 0.0 to 1.0, the model's own certainty
+ * @param skuRef     the SKU this concerns, or null for a vendor-level problem.
+ *                   Most findings are per-SKU: "the vendor is non-compliant" is
+ *                   not actionable, "SKU ACM-DRL-18V is outside the certificate
+ *                   scope" is. It is also what lets the conflict detector spot
+ *                   two reviewers disagreeing about the same item.
  */
 public record AgentFinding(
         Severity severity,
         String problem,
         List<Evidence> evidence,
         CheckType checkType,
-        double confidence
-) {
+        double confidence,
+        String skuRef
+) implements Serializable {
 
     public AgentFinding {
         if (severity == null) {
@@ -65,5 +72,13 @@ public record AgentFinding(
             throw new IllegalArgumentException("confidence must be 0.0-1.0, got " + confidence);
         }
         evidence = List.copyOf(evidence);
+        // Blank and null mean the same thing - a vendor-level finding - and
+        // allowing both would mean every comparison has to check for two.
+        skuRef = (skuRef == null || skuRef.isBlank()) ? null : skuRef;
+    }
+
+    /** True when this concerns one SKU rather than the vendor as a whole. */
+    public boolean isSkuSpecific() {
+        return skuRef != null;
     }
 }

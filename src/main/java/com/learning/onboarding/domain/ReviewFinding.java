@@ -1,5 +1,6 @@
 package com.learning.onboarding.domain;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -37,7 +38,7 @@ public record ReviewFinding(
         AgentFinding details,
         FindingSource source,
         Verdict verdict
-) {
+) implements Serializable {
 
     public ReviewFinding {
         if (findingId == null || findingId.isBlank()) {

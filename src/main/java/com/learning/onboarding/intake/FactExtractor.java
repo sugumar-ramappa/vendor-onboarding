@@ -110,8 +110,8 @@ public class FactExtractor {
             return DocumentFacts.none();
         }
         return new DocumentFacts(
-                labelledDate(text, EXPIRY_LABEL, page, source),
-                labelledDate(text, ISSUE_LABEL, page, source),
+                labelledDate(text, EXPIRY_LABEL, page, source).orElse(null),
+                labelledDate(text, ISSUE_LABEL, page, source).orElse(null),
                 standards(text, page, source),
                 amounts(text, page, source),
                 references(text, page, source));

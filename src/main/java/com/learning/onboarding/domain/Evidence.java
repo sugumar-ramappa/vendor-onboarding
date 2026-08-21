@@ -1,5 +1,7 @@
 package com.learning.onboarding.domain;
 
+import java.io.Serializable;
+
 /**
  * A citation: where in the submitted pack a finding came from.
  *
@@ -19,7 +21,7 @@ package com.learning.onboarding.domain;
  * @param page       1-based page number; null for documents without pages
  * @param quote      verbatim text from the document, not a paraphrase
  */
-public record Evidence(String documentId, Integer page, String quote) {
+public record Evidence(String documentId, Integer page, String quote) implements Serializable {
 
     public Evidence {
         if (documentId == null || documentId.isBlank()) {

@@ -1,5 +1,6 @@
 package com.learning.onboarding.intake;
 
+import java.io.Serializable;
 import com.learning.onboarding.domain.Evidence;
 
 /**
@@ -23,7 +24,7 @@ import com.learning.onboarding.domain.Evidence;
  *                    {@link ExtractionSource}, which decides what may be
  *                    concluded from this value
  */
-public record ParsedValue<T>(T value, String sourceQuote, Integer page, ExtractionSource source) {
+public record ParsedValue<T>(T value, String sourceQuote, Integer page, ExtractionSource source) implements Serializable {
 
     public ParsedValue {
         if (value == null) {

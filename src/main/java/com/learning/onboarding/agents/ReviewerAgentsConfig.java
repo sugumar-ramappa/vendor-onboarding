@@ -1,8 +1,13 @@
 package com.learning.onboarding.agents;
 
 import com.learning.onboarding.domain.ReviewArea;
+import com.learning.onboarding.graph.ConflictDetector;
+import com.learning.onboarding.graph.ReviewGraph;
+import org.bsc.langgraph4j.GraphStateException;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
 
 /**
  * Wires one reviewer per area.
@@ -27,5 +32,31 @@ public class ReviewerAgentsConfig {
     @Bean
     public ReviewerAgent qualityReviewer(PromptLibrary prompts, ReviewModel model) {
         return new ReviewerAgent(ReviewArea.QUALITY, "quality-v1", prompts, model);
+    }
+
+    @Bean
+    public ReviewerAgent completenessReviewer(PromptLibrary prompts, ReviewModel model) {
+        return new ReviewerAgent(ReviewArea.COMPLETENESS, "completeness-v1", prompts, model);
+    }
+
+    @Bean
+    public ReviewerAgent logisticsReviewer(PromptLibrary prompts, ReviewModel model) {
+        return new ReviewerAgent(ReviewArea.LOGISTICS, "logistics-v1", prompts, model);
+    }
+
+    @Bean
+    public ReviewerAgent financeReviewer(PromptLibrary prompts, ReviewModel model) {
+        return new ReviewerAgent(ReviewArea.FINANCE, "finance-v1", prompts, model);
+    }
+
+    /**
+     * The pipeline. Spring injects every ReviewerAgent bean above, so adding a
+     * sixth review area is one bean method and nothing else.
+     */
+    @Bean
+    public ReviewGraph reviewGraph(List<ReviewerAgent> reviewers,
+                                   ConflictDetector conflictDetector)
+            throws GraphStateException {
+        return new ReviewGraph(reviewers, ReviewGraph.DEFAULT_CONCURRENCY, conflictDetector);
     }
 }

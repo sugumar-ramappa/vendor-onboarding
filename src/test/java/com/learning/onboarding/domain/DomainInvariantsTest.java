@@ -27,7 +27,7 @@ class DomainInvariantsTest {
     private static AgentFinding agentFinding(Severity severity) {
         return new AgentFinding(severity, "electrical safety certificate expired",
                 List.of(Evidence.of("elec-safety-cert.pdf", "Valid until: 12 April 2026")),
-                CheckType.DETERMINISTIC, 0.95);
+                CheckType.DETERMINISTIC, 0.95, null);
     }
 
     @Nested
@@ -39,7 +39,7 @@ class DomainInvariantsTest {
         void findingRequiresEvidence() {
             var e = assertThrows(IllegalArgumentException.class, () ->
                     new AgentFinding(Severity.BLOCKING, "certificate expired",
-                            List.of(), CheckType.DETERMINISTIC, 0.9));
+                            List.of(), CheckType.DETERMINISTIC, 0.9, null));
             assertTrue(e.getMessage().contains("evidence"));
         }
 
@@ -55,7 +55,7 @@ class DomainInvariantsTest {
         void evidenceIsImmutable() {
             var refs = new java.util.ArrayList<>(List.of(
                     Evidence.of("a.pdf", "quoted text")));
-            var d = new AgentFinding(Severity.MINOR, "problem", refs, CheckType.SEMANTIC, 0.5);
+            var d = new AgentFinding(Severity.MINOR, "problem", refs, CheckType.SEMANTIC, 0.5, null);
             refs.clear();
             assertEquals(1, d.evidence().size(), "caller mutated the finding after construction");
         }
