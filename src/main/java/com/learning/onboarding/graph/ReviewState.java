@@ -30,7 +30,7 @@ import java.util.Map;
  *
  * <p><b>appenderWithDuplicate, not appender.</b> The plain
  * {@link Channels#appender} variant drops values equal to one already present.
- * Two reviewers legitimately raising the same claim, or a node running twice
+ * Two reviewers legitimately raising the same problem, or a node running twice
  * because the verifier sent work back round the cycle, would then be silently
  * lost - and a trace that omits the second pass through a node is a trace that
  * lies about what happened.

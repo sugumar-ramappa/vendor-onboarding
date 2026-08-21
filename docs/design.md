@@ -14,9 +14,9 @@ A vendor applies to supply. They submit a pack:
 
 ```
 company profile          insurance certificate
-ISO 9001 certificate     food safety audit report
-EDI capability form      sustainability questionnaire
-bank/reference letters   product category list
+product safety cert      quality audit report
+EDI capability form      GS1 registration
+filed accounts           SKU list with GTINs and case packs
 ```
 
 Today five departments review that pack independently, over several weeks, and
@@ -38,7 +38,7 @@ with different rulebooks. That is the whole answer to *"why not one prompt?"*
 
 ```
 Logistics:   "EDI-capable, 3-day lead time — ready to onboard"
-Quality:     "ISO 9001 certificate expired 4 months ago"
+Quality:     "electrical safety certificate expired 4 months ago"
 Compliance:  "insurance covers EU only; we ship to UK"
 Finance:     "filing history shows two late accounts"
 ```

@@ -25,8 +25,8 @@ class DomainInvariantsTest {
             UUID.randomUUID(), "compliance-v1", "gemini-3.6-flash", Instant.now());
 
     private static AgentFinding agentFinding(Severity severity) {
-        return new AgentFinding(severity, "ISO 9001 certificate expired",
-                List.of(Evidence.of("iso-cert.pdf", "Valid until: 12 April 2026")),
+        return new AgentFinding(severity, "electrical safety certificate expired",
+                List.of(Evidence.of("elec-safety-cert.pdf", "Valid until: 12 April 2026")),
                 CheckType.DETERMINISTIC, 0.95);
     }
 
@@ -47,7 +47,7 @@ class DomainInvariantsTest {
         @DisplayName("evidence cannot exist without a quote")
         void evidenceRequiresQuote() {
             assertThrows(IllegalArgumentException.class, () ->
-                    new Evidence("iso-cert.pdf", 1, "  "));
+                    new Evidence("elec-safety-cert.pdf", 1, "  "));
         }
 
         @Test
@@ -55,7 +55,7 @@ class DomainInvariantsTest {
         void evidenceIsImmutable() {
             var refs = new java.util.ArrayList<>(List.of(
                     Evidence.of("a.pdf", "quoted text")));
-            var d = new AgentFinding(Severity.MINOR, "claim", refs, CheckType.SEMANTIC, 0.5);
+            var d = new AgentFinding(Severity.MINOR, "problem", refs, CheckType.SEMANTIC, 0.5);
             refs.clear();
             assertEquals(1, d.evidence().size(), "caller mutated the finding after construction");
         }
@@ -111,13 +111,13 @@ class DomainInvariantsTest {
         }
 
         @Test
-        @DisplayName("a refuted finding does not")
+        @DisplayName("a disproved finding does not")
         void refutedDoesNotSurvive() {
             var f = ReviewFinding.unverified("f1", ReviewArea.COMPLIANCE,
                             agentFinding(Severity.BLOCKING), SOURCE)
-                    .withVerdict(Verdict.refuted(
+                    .withVerdict(Verdict.disproved(
                             "a renewed certificate is present later in the pack",
-                            List.of(Evidence.of("iso-cert-2027.pdf", "Valid until: 2027"))));
+                            List.of(Evidence.of("elec-safety-cert-2027.pdf", "Valid until: 2027"))));
             assertFalse(f.survives());
         }
 

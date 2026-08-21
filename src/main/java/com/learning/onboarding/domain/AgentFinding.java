@@ -31,14 +31,14 @@ import java.util.List;
  * nothing at runtime and cannot be bypassed.
  *
  * @param severity   how serious, from a fixed enum the model must choose within
- * @param claim      one sentence stating what is wrong
+ * @param problem      one sentence stating what is wrong
  * @param evidence   citations into the submitted pack; must not be empty
  * @param checkType  arithmetic or judgement - see {@link CheckType}
  * @param confidence 0.0 to 1.0, the model's own certainty
  */
 public record AgentFinding(
         Severity severity,
-        String claim,
+        String problem,
         List<Evidence> evidence,
         CheckType checkType,
         double confidence
@@ -48,15 +48,15 @@ public record AgentFinding(
         if (severity == null) {
             throw new IllegalArgumentException("severity is required");
         }
-        if (claim == null || claim.isBlank()) {
-            throw new IllegalArgumentException("claim is required");
+        if (problem == null || problem.isBlank()) {
+            throw new IllegalArgumentException("problem is required");
         }
         // The grounding rule, enforced at construction rather than left to a
         // validator someone might forget to wire in. An uncitable finding
         // cannot exist as an object.
         if (evidence == null || evidence.isEmpty()) {
             throw new IllegalArgumentException(
-                    "a finding must cite at least one piece of evidence: " + claim);
+                    "a finding must cite at least one piece of evidence: " + problem);
         }
         if (checkType == null) {
             throw new IllegalArgumentException("checkType is required");

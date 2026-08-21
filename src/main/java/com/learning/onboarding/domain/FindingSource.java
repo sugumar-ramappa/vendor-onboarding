@@ -23,21 +23,21 @@ import java.util.UUID;
  * <p>Prompts therefore live in version-controlled resource files with an
  * explicit version, not in string literals scattered through Java.
  *
- * @param correlationId ties this finding to the exact model call in the audit log
+ * @param callId ties this finding to the exact model call in the audit log
  * @param promptVersion which prompt produced it, e.g. "compliance-v3"
  * @param modelName     the pinned model, e.g. "gemini-3.6-flash"
- * @param at            when the call completed
+ * @param calledAt      when the call completed
  */
 public record FindingSource(
-        UUID correlationId,
+        UUID callId,
         String promptVersion,
         String modelName,
-        Instant at
+        Instant calledAt
 ) {
 
     public FindingSource {
-        if (correlationId == null) {
-            throw new IllegalArgumentException("correlationId is required");
+        if (callId == null) {
+            throw new IllegalArgumentException("callId is required");
         }
         if (promptVersion == null || promptVersion.isBlank()) {
             throw new IllegalArgumentException(
@@ -47,7 +47,7 @@ public record FindingSource(
         if (modelName == null || modelName.isBlank()) {
             throw new IllegalArgumentException("modelName is required");
         }
-        if (at == null) {
+        if (calledAt == null) {
             throw new IllegalArgumentException("timestamp is required");
         }
     }

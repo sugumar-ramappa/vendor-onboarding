@@ -62,7 +62,7 @@ public class StackCheck implements CommandLineRunner {
                 .user("""
                       Extract the certificate details from this text.
 
-                      "SQF Food Safety Certificate, scheme SQF Edition 9,
+                      "Electrical Safety Certificate, scheme EN 62841,
                        valid until 12 April 2026."
 
                       Today is 21 August 2026.

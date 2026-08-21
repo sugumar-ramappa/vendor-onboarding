@@ -1,12 +1,12 @@
 # vendor-onboarding
 
-Multi-agent supplier onboarding review, built to be **measured** rather than
-demonstrated.
+Multi-agent vendor onboarding review for a retailer, built to be **measured**
+rather than demonstrated.
 
-Five reviewers assess a supplier's application pack independently — the way five
-departments do today — a conflict detector reports where they contradict each
-other, and an adversarial verifier tries to refute every serious finding before
-it reaches a human.
+Before a vendor can ship SKUs to stores, five departments review their
+application pack independently. This runs those five reviews in one pass,
+reports where they **contradict each other**, and has an adversarial verifier
+try to refute every serious finding before it reaches a human.
 
 **Status: step 0.** Skeleton and stack verification only.
 
@@ -24,7 +24,7 @@ rulebooks. The agents model reviewers who exist.
 
 ```
 Logistics:   "EDI-capable, 3-day lead time — ready to onboard"
-Quality:     "ISO 9001 certificate expired 4 months ago"
+Quality:     "electrical safety certificate expired 4 months ago"
 Compliance:  "insurance covers EU only; we ship to UK"
 ```
 
@@ -59,7 +59,7 @@ Until those numbers exist, "multi-agent is better" is an opinion.
 | Spring Boot | 4.1.1 | latest stable |
 | Spring AI | 2.0.1 | models, tools, **MCP server**, advisors, Micrometer |
 | LangGraph4j | 1.8.24 | graph orchestration — **stable, not beta** |
-| Gemini | free tier | `gemini-2.5-flash` |
+| Gemini | free tier | `gemini-3.6-flash` (2.5 is retired for new projects) |
 
 **Every version was read from `repo1.maven.org` metadata, not the Maven search
 API** — the search API serves stale data and reported `langchain4j 1.0.0` when
@@ -82,19 +82,16 @@ safe patch bump. A Spring AI *minor* upgrade needs that rechecked.
 
 ### Prerequisites
 
-```bash
-brew install maven
-echo 'export JAVA_HOME=$(/usr/libexec/java_home -v 21)' >> ~/.zshrc
-source ~/.zshrc
-mvn -version          # must report Java 21
-```
+**Java 21 only.** Maven is not installed - `./mvnw` fetches it into `~/.m2`.
 
-Java 21 (Corretto) is already the default JDK on this machine.
+```bash
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+```
 
 ### Step 0a — the graph spike, no API key needed
 
 ```bash
-mvn test -Dtest=GraphSpikeTest
+./mvnw test -Dtest=GraphSpikeTest
 ```
 
 Proves a graph compiles and runs, state flows between nodes, appender channels
@@ -105,10 +102,12 @@ expected.
 ### Step 0b — the model call, needs the key
 
 ```bash
-cp .env.example .env        # add your Google AI Studio key
-export GOOGLE_API_KEY=...
-mvn spring-boot:run -Dspring-boot.run.profiles=stackcheck
+cp .env.example .env        # then paste your key into it
+./mvnw spring-boot:run -Dspring-boot.run.profiles=stackcheck
 ```
+
+`.env` is read via `spring.config.import` - Spring does not pick up `.env`
+files natively, so that line in `application.yml` is what makes this work.
 
 Proves Spring Boot 4.1 starts with Spring AI 2.0, the Gemini key works, and
 structured output binds a JSON response to a Java record.

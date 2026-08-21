@@ -1,7 +1,7 @@
 package com.learning.onboarding.domain;
 
 /**
- * A citation: where in the submitted pack a claim came from.
+ * A citation: where in the submitted pack a finding came from.
  *
  * <p>Every finding must carry at least one of these, and the grounding guardrail
  * verifies that {@link #quote} actually appears in the document named by

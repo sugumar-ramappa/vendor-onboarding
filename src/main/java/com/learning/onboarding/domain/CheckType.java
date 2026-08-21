@@ -5,15 +5,16 @@ package com.learning.onboarding.domain;
  *
  * <p>This distinction turned out to matter more than expected. A great deal of
  * compliance checking is deterministic once the fields are extracted - is
- * {@code SQF} in the accepted-schemes list, is the expiry after the application
- * date, is grade B at least grade B. Those are set membership and comparisons,
- * and they belong in Java where they are exact and testable.
+ * {@code EN 62841} in the accepted-standards list, is the expiry after the
+ * requested go-live date, is the case weight under the manual-handling limit.
+ * Those are set membership and comparisons, and they belong in Java where they
+ * are exact and testable.
  *
  * <p>What genuinely needs a model is the other kind:
  *
  * <pre>
- *   Certificate scope: "manufacture and packing of ambient bakery products"
- *   Applying to supply: "ambient savoury snacks"
+ *   Certificate scope: "hand tools and non-powered garden implements"
+ *   Applying to supply: "18V cordless drill, 2Ah battery, 2-pack"
  *   → is the certified scope sufficient?
  * </pre>
  *

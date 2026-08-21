@@ -111,7 +111,7 @@ to refute and to default to refuted when uncertain.
 12 applications as plain JSON, with seeded defects recorded:
 
 ```
-02  expired GFSI certificate           BLOCKING  compliance
+02  expired electrical safety cert     BLOCKING  compliance
 05  insurance territory excludes UK    BLOCKING  compliance
 07  logistics ready vs cert expired    CONFLICT
 09  clean pack                         (no findings expected)
