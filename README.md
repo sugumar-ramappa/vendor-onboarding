@@ -133,8 +133,12 @@ map to OWASP LLM01, LLM05, LLM06, LLM09 and LLM10.
 
 ## Documentation
 
+**Start here:** [`docs/interview/`](docs/interview/) — architecture flow, code
+walkthrough, and how it is tested and measured.
+
 | | |
 |---|---|
+| [`docs/interview/`](docs/interview/) | **Interview reference** — three documents, in the order you would present them |
 | [`docs/design.md`](docs/design.md) | Full architecture, agents, guardrails, measurement |
 | [`docs/performance-and-cost.md`](docs/performance-and-cost.md) | **Where the cost is, and what was done about it** — latency, caching, concurrency |
 | [`docs/engineering-log.md`](docs/engineering-log.md) | Silent bugs and framework traps, with causes |
