@@ -1,0 +1,16 @@
+# Profile for the step-0 stack check.
+#
+# The main application is a web service, so `spring-boot:run` starts Tomcat and
+# stays up - the check runs, prints, and then the process sits there forever.
+# Turning the web server off makes the app run its CommandLineRunner and exit,
+# which is what a verification task should do: run, report, terminate with a
+# meaningful exit code.
+spring:
+  main:
+    web-application-type: none
+
+logging:
+  level:
+    # Quiet the framework so the check's own output is readable.
+    root: WARN
+    com.learning.onboarding: INFO

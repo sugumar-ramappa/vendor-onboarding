@@ -1,0 +1,68 @@
+spring:
+  application:
+    name: vendor-onboarding
+
+  config:
+    # Spring does NOT read .env files the way python-dotenv does. This import
+    # treats .env as a properties file, which gives the same ergonomics as the
+    # RAG project in this workspace - drop the key in .env and forget about it.
+    #
+    # `optional:` means a missing file is not an error, so CI and container
+    # deployments can supply GOOGLE_API_KEY as a real environment variable
+    # instead. Precedence still favours a genuine env var, which is what you
+    # want in production.
+    import: optional:file:./.env[.properties]
+
+  ai:
+    google:
+      genai:
+        # Read from the environment so no key is ever committed.
+        api-key: ${GOOGLE_API_KEY}
+        chat:
+          options:
+            # Pinned to an explicit version, deliberately NOT gemini-flash-latest.
+            # An alias silently changes the model underneath you, which would make
+            # the step-8 comparison meaningless - a recall difference between two
+            # runs could be the architecture or could be a model swap, and you
+            # would have no way to tell.
+            #
+            # gemini-2.5-flash is retired for new projects; the API's own error
+            # points at this one.
+            model: gemini-3.6-flash
+            # Low, so reviewers do not vary run to run. Otherwise the measurement
+            # captures sampling noise instead of the architecture.
+            temperature: 0.1
+
+    # The MCP server exposing read-only reference data to the agents.
+    mcp:
+      server:
+        name: vendor-onboarding-tools
+        version: 0.1.0
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.learning.onboarding: DEBUG
+
+# ---------------------------------------------------------------------------
+# Review policy.
+#
+# These live here, NOT in a prompt. That is the central guardrail: no vendor
+# document can widen a threshold, because no threshold is ever sent to a model.
+# The decision gate reads these in plain Java.
+# ---------------------------------------------------------------------------
+onboarding:
+  policy:
+    # A finding at or above this severity blocks onboarding outright.
+    blocking-severity: BLOCKING
+    # Certificates must remain valid at least this long past the application.
+    min-certificate-validity-days: 30
+    # Public liability cover required, in GBP.
+    min-public-liability: 5000000
+  limits:
+    # Caps that stop a crafted document driving an expensive agent loop.
+    max-graph-steps: 20
+    max-verifier-passes: 2
+    max-tokens-per-application: 60000

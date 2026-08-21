@@ -1,0 +1,26 @@
+# Build
+target/
+*.class
+*.jar
+
+# ...except the Maven Wrapper jar, which MUST be committed.
+# Without it a fresh clone cannot run ./mvnw without first downloading it,
+# which defeats the point of the wrapper: a build that works identically on
+# any machine and any CI runner with nothing installed but a JDK.
+!.mvn/wrapper/maven-wrapper.jar
+
+# Secrets - never commit an API key
+.env
+application-local.yml
+application-local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/settings.json
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
