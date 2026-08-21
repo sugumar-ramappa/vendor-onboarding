@@ -97,15 +97,24 @@ public class FactExtractor {
      * @param page which page it came from, or null
      */
     public DocumentFacts extract(String text, Integer page) {
+        return extract(text, page, ExtractionSource.NATIVE_TEXT);
+    }
+
+    /**
+     * @param source how the text was obtained. Values parsed out of text a model
+     *               read from a scan are exact-looking but are not exact, and
+     *               everything downstream needs to know that.
+     */
+    public DocumentFacts extract(String text, Integer page, ExtractionSource source) {
         if (text == null || text.isBlank()) {
             return DocumentFacts.none();
         }
         return new DocumentFacts(
-                labelledDate(text, EXPIRY_LABEL, page),
-                labelledDate(text, ISSUE_LABEL, page),
-                standards(text, page),
-                amounts(text, page),
-                references(text, page));
+                labelledDate(text, EXPIRY_LABEL, page, source),
+                labelledDate(text, ISSUE_LABEL, page, source),
+                standards(text, page, source),
+                amounts(text, page, source),
+                references(text, page, source));
     }
 
     /**
@@ -116,7 +125,8 @@ public class FactExtractor {
      * would attach the wrong value to the right label - the kind of error that
      * produces a confident wrong answer rather than an obvious failure.
      */
-    private Optional<ParsedValue<LocalDate>> labelledDate(String text, Pattern label, Integer page) {
+    private Optional<ParsedValue<LocalDate>> labelledDate(String text, Pattern label,
+                                                          Integer page, ExtractionSource source) {
         Matcher labelMatch = label.matcher(text);
         while (labelMatch.find()) {
             int from = labelMatch.end();
@@ -129,7 +139,7 @@ public class FactExtractor {
                     // Quote the label AND the date, so the citation shows which
                     // date this was - "12 April 2026" alone proves nothing.
                     String quote = text.substring(labelMatch.start(), from + dateMatch.end()).trim();
-                    return Optional.of(new ParsedValue<>(parsed.get(), quote, page));
+                    return Optional.of(new ParsedValue<>(parsed.get(), quote, page, source));
                 }
             }
         }
@@ -161,20 +171,20 @@ public class FactExtractor {
         return Optional.empty();
     }
 
-    private List<ParsedValue<String>> standards(String text, Integer page) {
+    private List<ParsedValue<String>> standards(String text, Integer page, ExtractionSource source) {
         List<ParsedValue<String>> found = new ArrayList<>();
         Matcher m = STANDARD.matcher(text);
         while (m.find()) {
             String normalised = m.group(1).toUpperCase() + " " + m.group(2);
             boolean alreadySeen = found.stream().anyMatch(p -> p.value().equals(normalised));
             if (!alreadySeen) {
-                found.add(new ParsedValue<>(normalised, quoteAround(text, m.start(), m.end()), page));
+                found.add(new ParsedValue<>(normalised, quoteAround(text, m.start(), m.end()), page, source));
             }
         }
         return found;
     }
 
-    private List<ParsedValue<BigDecimal>> amounts(String text, Integer page) {
+    private List<ParsedValue<BigDecimal>> amounts(String text, Integer page, ExtractionSource source) {
         List<ParsedValue<BigDecimal>> found = new ArrayList<>();
         Matcher m = MONEY.matcher(text);
         while (m.find()) {
@@ -187,7 +197,7 @@ public class FactExtractor {
                 } else if (suffix.startsWith("k")) {
                     value = value.multiply(BigDecimal.valueOf(1_000));
                 }
-                found.add(new ParsedValue<>(value, m.group().trim(), page));
+                found.add(new ParsedValue<>(value, m.group().trim(), page, source));
             } catch (NumberFormatException ignored) {
                 // Malformed number - skip rather than guess.
             }
@@ -195,13 +205,13 @@ public class FactExtractor {
         return found;
     }
 
-    private List<ParsedValue<String>> references(String text, Integer page) {
+    private List<ParsedValue<String>> references(String text, Integer page, ExtractionSource source) {
         List<ParsedValue<String>> found = new ArrayList<>();
         Matcher m = REFERENCE.matcher(text);
         while (m.find()) {
             String ref = m.group(1);
             if (found.stream().noneMatch(p -> p.value().equals(ref))) {
-                found.add(new ParsedValue<>(ref, m.group().trim(), page));
+                found.add(new ParsedValue<>(ref, m.group().trim(), page, source));
             }
         }
         return found;

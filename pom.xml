@@ -150,6 +150,18 @@
     </dependency>
 
     <!--
+      Excel. The SKU list arrives as a spreadsheet in practice - nobody types
+      400 SKUs with GTINs and case packs into a PDF - and a spreadsheet is the
+      GOOD case: already structured, so it parses straight into Sku records with
+      no model involved at all.
+    -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>5.5.1</version>
+    </dependency>
+
+    <!--
       PDF text extraction. Vendors submit certificates as scanned or generated
       PDFs, and the text has to come out before anything can be parsed from it.
 

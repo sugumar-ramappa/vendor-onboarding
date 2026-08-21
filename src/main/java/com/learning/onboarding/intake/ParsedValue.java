@@ -19,8 +19,11 @@ import com.learning.onboarding.domain.Evidence;
  * @param value       what was parsed
  * @param sourceQuote the exact text it came from
  * @param page        which page, or null for documents without pages
+ * @param source      whether the text was read exactly or by a model - see
+ *                    {@link ExtractionSource}, which decides what may be
+ *                    concluded from this value
  */
-public record ParsedValue<T>(T value, String sourceQuote, Integer page) {
+public record ParsedValue<T>(T value, String sourceQuote, Integer page, ExtractionSource source) {
 
     public ParsedValue {
         if (value == null) {
@@ -31,6 +34,21 @@ public record ParsedValue<T>(T value, String sourceQuote, Integer page) {
                     "sourceQuote is required - a parsed value that cannot show its "
                             + "own source cannot be cited, and an uncitable finding is discarded");
         }
+        if (source == null) {
+            throw new IllegalArgumentException(
+                    "source is required - without it there is no way to tell an exact "
+                            + "reading from a model's guess at a smudged scan");
+        }
+    }
+
+    /** Convenience for the common case: text read exactly from the document. */
+    public static <T> ParsedValue<T> exact(T value, String quote, Integer page) {
+        return new ParsedValue<>(value, quote, page, ExtractionSource.NATIVE_TEXT);
+    }
+
+    /** True when this value is exact rather than a model's reading of an image. */
+    public boolean isExact() {
+        return source == ExtractionSource.NATIVE_TEXT;
     }
 
     /** Turns this into a citation. Always groundable, by construction. */
