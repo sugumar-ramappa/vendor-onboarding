@@ -136,5 +136,7 @@ map to OWASP LLM01, LLM05, LLM06, LLM09 and LLM10.
 | | |
 |---|---|
 | [`docs/design.md`](docs/design.md) | Full architecture, agents, guardrails, measurement |
+| [`docs/performance-and-cost.md`](docs/performance-and-cost.md) | **Where the cost is, and what was done about it** — latency, caching, concurrency |
+| [`docs/engineering-log.md`](docs/engineering-log.md) | Silent bugs and framework traps, with causes |
 | [`docs/production-standards.md`](docs/production-standards.md) | **The bar this code is held to** — fail-closed, prompt versioning, idempotency, typed errors |
 | [`docs/plan-6h.md`](docs/plan-6h.md) | Reduced-scope variant (superseded) |
