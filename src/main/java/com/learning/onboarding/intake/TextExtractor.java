@@ -2,12 +2,18 @@ package com.learning.onboarding.intake;
 
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -21,6 +27,17 @@ import java.util.List;
  * text; this is where that assumption is established or the document is
  * rejected.
  *
+ * <h2>Two routes, and the difference matters downstream</h2>
+ * <pre>
+ *   PDF with a text layer  →  PDFBox        →  NATIVE_TEXT   exact
+ *   plain text, CSV        →  UTF-8 decode  →  NATIVE_TEXT   exact
+ *   scanned PDF (images)   →  vision model  →  MODEL_VISION  probabilistic
+ * </pre>
+ *
+ * <p>The third route exists because scanned certificates are normal, especially
+ * from smaller vendors sending a stamped and signed original. What comes back is
+ * tagged so nothing downstream mistakes it for an exact reading.
+ *
  * <h2>Limits, and why they are here rather than further in</h2>
  * A vendor uploads the files. Nothing stops them uploading a 2GB PDF with a
  * million pages, whether by accident or not, and by the time that reaches an
@@ -33,12 +50,43 @@ public class TextExtractor {
 
     private final long maxBytes;
     private final int maxPages;
+    private final int maxVisionPages;
+    private final int visionDpi;
+    private final ScannedPageReader visionReader;
 
+    @Autowired   // three constructors exist; this is the one Spring must use
     public TextExtractor(
             @Value("${onboarding.intake.max-file-bytes:20971520}") long maxBytes,
-            @Value("${onboarding.intake.max-pages:200}") int maxPages) {
+            @Value("${onboarding.intake.max-pages:200}") int maxPages,
+            // Far lower than maxPages: every vision page is a model call, so an
+            // 80-page scanned audit report would be 80 calls and a large bill.
+            // Beyond this a human is cheaper and more reliable.
+            @Value("${onboarding.intake.vision.max-pages:15}") int maxVisionPages,
+            // 200 DPI reads stamped and signed certificates reliably. Higher
+            // mostly grows the image without improving the transcription.
+            @Value("${onboarding.intake.vision.dpi:200}") int visionDpi,
+            ObjectProvider<ScannedPageReader> visionReader) {
         this.maxBytes = maxBytes;
         this.maxPages = maxPages;
+        this.maxVisionPages = maxVisionPages;
+        this.visionDpi = visionDpi;
+        // Absent when vision is switched off, in which case scans are rejected.
+        this.visionReader = visionReader.getIfAvailable(() -> ScannedPageReader.UNAVAILABLE);
+    }
+
+    /** Test constructor: no Spring, no vision. */
+    public TextExtractor(long maxBytes, int maxPages) {
+        this(maxBytes, maxPages, 15, 200, ScannedPageReader.UNAVAILABLE);
+    }
+
+    /** Test constructor with a stub reader. */
+    public TextExtractor(long maxBytes, int maxPages, int maxVisionPages, int visionDpi,
+                         ScannedPageReader visionReader) {
+        this.maxBytes = maxBytes;
+        this.maxPages = maxPages;
+        this.maxVisionPages = maxVisionPages;
+        this.visionDpi = visionDpi;
+        this.visionReader = visionReader;
     }
 
     /**
@@ -58,17 +106,9 @@ public class TextExtractor {
         // Sniff the magic bytes rather than trusting the extension. A vendor
         // renaming a spreadsheet to .pdf is far more likely to be carelessness
         // than an attack, but either way the content decides, not the name.
-        ExtractedText text = looksLikePdf(content)
+        return looksLikePdf(content)
                 ? extractPdf(content, filename)
                 : extractPlainText(content);
-
-        if (text.hasNoTextLayer()) {
-            // Almost always a scan. Reported, never treated as an empty
-            // document - see ExtractedText.hasNoTextLayer().
-            throw new IntakeException(IntakeException.Cause.NO_TEXT_LAYER, filename,
-                    "%d page(s) parsed but no text found - probably a scan".formatted(text.pageCount()));
-        }
-        return text;
     }
 
     private static boolean looksLikePdf(byte[] content) {
@@ -108,10 +148,53 @@ public class TextExtractor {
                 stripper.setEndPage(p);
                 pages.add(stripper.getText(doc));
             }
-            return new ExtractedText(pages, total > maxPages);
+
+            ExtractedText text = ExtractedText.exact(pages, total > maxPages);
+            if (!text.hasNoTextLayer()) {
+                return text;
+            }
+
+            // No text layer: a scan. Read it with a model rather than rejecting
+            // it - see the class javadoc.
+            log.info("{}: no text layer over {} page(s), falling back to vision",
+                    filename, readable);
+            return visionRead(doc, filename, Math.min(readable, maxVisionPages),
+                    total > maxVisionPages);
 
         } catch (IOException e) {
             throw new IntakeException(IntakeException.Cause.CORRUPT, filename, e.getMessage());
+        }
+    }
+
+    /**
+     * Renders each page and asks the vision reader to transcribe it.
+     *
+     * <p>If every page still comes back empty, the document is rejected. A scan
+     * the model could not read must not become an empty document - that would
+     * let an unreadable certificate pass as one containing no problems.
+     */
+    private ExtractedText visionRead(PDDocument doc, String filename, int pageLimit,
+                                     boolean truncated) throws IOException {
+        PDFRenderer renderer = new PDFRenderer(doc);
+        List<String> pages = new ArrayList<>(pageLimit);
+
+        for (int p = 0; p < pageLimit; p++) {
+            BufferedImage image = renderer.renderImageWithDPI(p, visionDpi);
+            pages.add(visionReader.transcribe(toPng(image), filename, p + 1));
+        }
+
+        ExtractedText text = ExtractedText.fromVision(pages, truncated);
+        if (text.hasNoTextLayer()) {
+            throw new IntakeException(IntakeException.Cause.NO_TEXT_LAYER, filename,
+                    "no text found on %d page(s), even by vision".formatted(pageLimit));
+        }
+        return text;
+    }
+
+    private static byte[] toPng(BufferedImage image) throws IOException {
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            ImageIO.write(image, "png", out);
+            return out.toByteArray();
         }
     }
 
@@ -124,7 +207,6 @@ public class TextExtractor {
      */
     private ExtractedText extractPlainText(byte[] content) {
         String all = new String(content, StandardCharsets.UTF_8);
-        List<String> pages = List.of(all.split("\f"));
-        return new ExtractedText(pages, false);
+        return ExtractedText.exact(List.of(all.split("\f")), false);
     }
 }

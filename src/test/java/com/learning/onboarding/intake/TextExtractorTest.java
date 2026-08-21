@@ -62,6 +62,8 @@ class TextExtractorTest {
         assertTrue(text.page(1).contains("Certificate of Conformity"));
         assertTrue(text.page(2).contains("12 April 2026"));
         assertFalse(text.truncated());
+        assertEquals(ExtractionSource.NATIVE_TEXT, text.source());
+        assertTrue(text.supportsDeterministicFindings());
     }
 
     @Test
@@ -78,24 +80,53 @@ class TextExtractorTest {
         assertEquals(2, page2.expiry().orElseThrow().asEvidence("cert.pdf").page());
     }
 
-    @Test
-    @DisplayName("a PDF with no text layer is rejected, not treated as empty")
-    void scannedPdfIsRejected() throws Exception {
-        // A page with no text content: exactly what a scan produces - a valid
-        // PDF containing an image of text.
+    /** A valid PDF page with no text content - exactly what a scan produces. */
+    private static byte[] scannedPdf() throws Exception {
         try (PDDocument doc = new PDDocument();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             doc.addPage(new PDPage());
             doc.save(out);
-
-            var e = assertThrows(IntakeException.class,
-                    () -> extractor.extract(out.toByteArray(), "scanned-cert.pdf"));
-
-            assertEquals(IntakeException.Cause.NO_TEXT_LAYER, e.reason(),
-                    "a scanned certificate that yields no text must escalate - "
-                            + "otherwise the vendor looks compliant because their "
-                            + "certificate was unreadable");
+            return out.toByteArray();
         }
+    }
+
+    @Test
+    @DisplayName("a scan is read by vision and tagged as such")
+    void scannedPdfTakesVisionPath() throws Exception {
+        ScannedPageReader stub = (image, doc, page) -> "Valid until: 12 April 2026";
+        TextExtractor withVision = new TextExtractor(20_971_520L, 200, 15, 72, stub);
+
+        ExtractedText text = withVision.extract(scannedPdf(), "scanned-cert.pdf");
+
+        assertEquals(ExtractionSource.MODEL_VISION, text.source());
+        assertTrue(text.fullText().contains("12 April 2026"));
+        assertFalse(text.supportsDeterministicFindings(),
+                "a date a model read off a smudged scan is not arithmetic, however "
+                        + "exact the comparison afterwards is");
+    }
+
+    @Test
+    @DisplayName("a scan is rejected when vision is switched off")
+    void scannedPdfRejectedWithoutVision() throws Exception {
+        var e = assertThrows(IntakeException.class,
+                () -> extractor.extract(scannedPdf(), "scanned-cert.pdf"));
+
+        assertEquals(IntakeException.Cause.NO_TEXT_LAYER, e.reason(),
+                "a scanned certificate that yields no text must escalate - "
+                        + "otherwise the vendor looks compliant because their "
+                        + "certificate was unreadable");
+    }
+
+    @Test
+    @DisplayName("a scan vision cannot read is rejected, not passed on as empty")
+    void unreadableScanIsRejected() throws Exception {
+        ScannedPageReader blind = (image, doc, page) -> "";
+        TextExtractor withVision = new TextExtractor(20_971_520L, 200, 15, 72, blind);
+
+        var e = assertThrows(IntakeException.class,
+                () -> withVision.extract(scannedPdf(), "unreadable.pdf"));
+
+        assertEquals(IntakeException.Cause.NO_TEXT_LAYER, e.reason());
     }
 
     @Test

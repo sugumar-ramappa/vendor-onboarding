@@ -27,7 +27,17 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>Runs against a throwaway container, so it cannot touch the local
  * {@code vendor_onboarding} database, let alone the RAG project's.
  */
-@SpringBootTest
+@SpringBootTest(properties = {
+        // A schema test has no business loading a model client. Excluding the
+        // AI autoconfiguration keeps this test about the database, and stops it
+        // failing for reasons that have nothing to do with the schema.
+        "spring.autoconfigure.exclude="
+                + "org.springframework.ai.model.google.genai.autoconfigure.chat"
+                + ".GoogleGenAiChatAutoConfiguration,"
+                + "org.springframework.ai.model.chat.client.autoconfigure"
+                + ".ChatClientAutoConfiguration",
+        "onboarding.intake.vision.enabled=false"
+})
 @ActiveProfiles("test")
 @Testcontainers
 class SchemaMigrationTest {
@@ -45,8 +55,9 @@ class SchemaMigrationTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
-        // Not exercising the model here; a dummy key keeps the context loading.
-        registry.add("spring.ai.google.genai.api-key", () -> "test-key-not-used");
+        // The agent role is created by V3 with this password, so the agent
+        // DataSource must be given the same one.
+        registry.add("onboarding.agent-datasource.password", () -> "agent-local-dev-only");
     }
 
     @Autowired

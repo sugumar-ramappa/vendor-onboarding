@@ -26,6 +26,10 @@ spring:
     # entities. The SQL that ships is the SQL that was read and tested.
     locations: classpath:db/migration
     baseline-on-migrate: false
+    placeholders:
+      # Kept out of the migration file so no password is ever committed.
+      # V3 creates the read-only role the agents connect as.
+      agentPassword: ${AGENT_DB_PASSWORD:agent-local-dev-only}
 
   ai:
     google:
@@ -80,6 +84,18 @@ onboarding:
     # 2GB PDF arriving - and by the time it reaches an agent the memory is gone.
     max-file-bytes: 20971520     # 20 MB
     max-pages: 200
+    vision:
+      # Scanned certificates are normal, especially from smaller vendors sending
+      # a stamped and signed original. Refusing them would make the system
+      # unusable rather than safe.
+      enabled: true
+      # Far lower than max-pages: every vision page is a model call, so an
+      # 80-page scanned audit report would be 80 calls. Beyond this a human is
+      # cheaper and more reliable.
+      max-pages: 15
+      # 200 DPI reads stamped certificates reliably; higher mostly grows the
+      # image without improving the transcription.
+      dpi: 200
 
   limits:
     # Caps that stop a crafted document driving an expensive agent loop.
