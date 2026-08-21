@@ -13,6 +13,20 @@ spring:
     # want in production.
     import: optional:file:./.env[.properties]
 
+  datasource:
+    # The application's own connection - the only one permitted to write.
+    # A separate read-only role for the agents is created in V3.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/vendor_onboarding}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD}
+
+  flyway:
+    enabled: true
+    # Schema comes from reviewed, ordered migrations - never generated from
+    # entities. The SQL that ships is the SQL that was read and tested.
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
   ai:
     google:
       genai:
