@@ -28,14 +28,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * {@code vendor_onboarding} database, let alone the RAG project's.
  */
 @SpringBootTest(properties = {
-        // A schema test has no business loading a model client. Excluding the
-        // AI autoconfiguration keeps this test about the database, and stops it
-        // failing for reasons that have nothing to do with the schema.
-        "spring.autoconfigure.exclude="
-                + "org.springframework.ai.model.google.genai.autoconfigure.chat"
-                + ".GoogleGenAiChatAutoConfiguration,"
-                + "org.springframework.ai.model.chat.client.autoconfigure"
-                + ".ChatClientAutoConfiguration",
+        // The whole context loads, including the agent layer - a dummy key is
+        // enough because nothing here calls a model. Excluding the AI
+        // autoconfiguration instead would mean this test stops noticing when a
+        // new bean fails to wire.
+        "spring.ai.google.genai.api-key=test-key-never-used",
         "onboarding.intake.vision.enabled=false"
 })
 @ActiveProfiles("test")
