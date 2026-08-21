@@ -2,6 +2,7 @@ package com.learning.onboarding.agents;
 
 import com.learning.onboarding.domain.ReviewArea;
 import com.learning.onboarding.graph.ConflictDetector;
+import com.learning.onboarding.graph.GroundingCheck;
 import com.learning.onboarding.graph.ReviewGraph;
 import org.bsc.langgraph4j.GraphStateException;
 import org.springframework.beans.factory.annotation.Value;
@@ -63,6 +64,19 @@ public class ReviewerAgentsConfig {
     }
 
     /**
+     * The challenger.
+     *
+     * <p>Its own prompt and its own context. A model asked to check work it just
+     * produced agrees with itself; one that did not write the finding has no
+     * such attachment, and that separation is the entire mechanism.
+     */
+    @Bean
+    public VerifierAgent verifierAgent(PromptLibrary prompts,
+                                       VerifierAgent.VerifierModel model) {
+        return new VerifierAgent("verifier-v1", prompts, model);
+    }
+
+    /**
      * The pipeline. Spring injects every ReviewerAgent bean above, so adding a
      * sixth review area is one bean method and nothing else.
      */
@@ -70,8 +84,11 @@ public class ReviewerAgentsConfig {
     public ReviewGraph reviewGraph(
             List<ReviewerAgent> reviewers,
             ConflictDetector conflictDetector,
+            GroundingCheck groundingCheck,
+            VerifierAgent verifier,
             @Value("${onboarding.model.concurrency:2}") int concurrency)
             throws GraphStateException {
-        return new ReviewGraph(reviewers, concurrency, conflictDetector);
+        return new ReviewGraph(reviewers, concurrency, conflictDetector,
+                groundingCheck, verifier);
     }
 }

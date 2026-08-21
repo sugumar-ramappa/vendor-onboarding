@@ -1,0 +1,60 @@
+{
+  "id": "F14",
+  "description": "Clean direct-to-store application, meeting the tighter ASN notice that model requires",
+  "clean": true,
+  "applicationJson": {
+    "applicationId": "F14-APP",
+    "vendorName": "Ashlyn Ironmongery Ltd",
+    "category": "SECURITY_AND_IRONMONGERY",
+    "deliveryModel": "DIRECT_TO_STORE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "ASH-LOK-05",
+        "description": "5-lever mortice lock",
+        "gtin": "5022222000014",
+        "casePack": 10,
+        "caseWeightKg": "6.5",
+        "hazardous": false
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "ASHLYN IRONMONGERY LTD\nCompany number 08123456\nRegistered office: 1 Trade Park, Leeds\nTrading since 2010."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nSee attached schedule."
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-5022222\nInsured: Ashlyn Ironmongery Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 10,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 9.6m. Net assets GBP 2.8m. Filed on time. Unqualified opinion."
+      },
+      {
+        "documentId": "edi-form.pdf",
+        "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nWe transmit per-store EDIFACT DESADV advance ship notices\n72 hours before despatch. Carton-level GS1-128 labels applied. Lead time 5 days."
+      },
+      {
+        "documentId": "gs1.pdf",
+        "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nAshlyn Ironmongery Ltd\nCompany prefix: 5022222\nValid to 31 December 2029"
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: 1 Trade Park, Leeds\nGrade: A\nNon-conformances raised: none\nAudit date: 11 May 2026"
+      }
+    ]
+  },
+  "expected": []
+}

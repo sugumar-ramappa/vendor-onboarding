@@ -1,0 +1,50 @@
+{
+  "id": "F12",
+  "description": "Clean drop-ship application. No ASN or GS1 required, because nothing is received.",
+  "clean": true,
+  "applicationJson": {
+    "applicationId": "F12-APP",
+    "vendorName": "Ferndale Sheds Ltd",
+    "category": "GARDEN_AND_OUTDOOR",
+    "deliveryModel": "DROP_SHIP",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "FER-SHD-88",
+        "description": "8x6 apex garden shed",
+        "gtin": "5033333000011",
+        "casePack": 1,
+        "caseWeightKg": "180.0",
+        "hazardous": false
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "FERNDALE SHEDS LTD\nCompany number 08123456\nRegistered office: 1 Trade Park, Leeds\nTrading since 2010."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nSee attached schedule."
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-5033333\nInsured: Ferndale Sheds Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 10,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 9.6m. Net assets GBP 2.8m. Filed on time. Unqualified opinion."
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: 1 Trade Park, Leeds\nGrade: A\nNon-conformances raised: none\nAudit date: 11 May 2026"
+      }
+    ]
+  },
+  "expected": []
+}

@@ -1,0 +1,78 @@
+{
+  "id": "F09",
+  "description": "A 31kg case going direct to store, where there is no forklift",
+  "clean": false,
+  "applicationJson": {
+    "applicationId": "F09-APP",
+    "vendorName": "Barrow Aggregates Ltd",
+    "category": "BUILDING_MATERIALS",
+    "deliveryModel": "DIRECT_TO_STORE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "BAR-PLA-25",
+        "description": "Plaster 25kg bag",
+        "gtin": "5088888000015",
+        "casePack": 1,
+        "caseWeightKg": "31.0",
+        "hazardous": false
+      },
+      {
+        "vendorSku": "BAR-SND-10",
+        "description": "Sharp sand 10kg",
+        "gtin": "5088888000022",
+        "casePack": 2,
+        "caseWeightKg": "21.0",
+        "hazardous": false
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "BARROW AGGREGATES LTD\nCompany number 08123456\nRegistered office: 1 Trade Park, Leeds\nTrading since 2010."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nSee attached schedule."
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-5088888\nInsured: Barrow Aggregates Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 10,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 9.6m. Net assets GBP 2.8m. Filed on time. Unqualified opinion."
+      },
+      {
+        "documentId": "edi-form.pdf",
+        "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nWe transmit EDIFACT DESADV advance ship notices 48 hours before despatch.\nWe receive EDIFACT ORDERS. Lead time 7 days."
+      },
+      {
+        "documentId": "gs1.pdf",
+        "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nBarrow Aggregates Ltd\nCompany prefix: 5088888\nValid to 31 December 2029"
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: 1 Trade Park, Leeds\nGrade: A\nNon-conformances raised: none\nAudit date: 11 May 2026"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "area": "LOGISTICS",
+      "minSeverity": "MAJOR",
+      "sku": "BAR-PLA-25",
+      "mustMention": [
+        "weight"
+      ],
+      "note": "25kg limit comes from the finance_threshold table. Per-SKU, because naming the item is what makes it actionable."
+    }
+  ]
+}

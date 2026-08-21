@@ -1,0 +1,32 @@
+{
+  "id": "F02",
+  "description": "A complete, compliant application. The correct answer is no findings.",
+  "clean": true,
+  "applicationJson": {
+    "applicationId": "F02-APP",
+    "vendorName": "Brookvale Hardware Ltd",
+    "category": "HAND_TOOLS",
+    "deliveryModel": "DISTRIBUTION_CENTRE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      { "vendorSku": "BRK-HAM-16", "description": "Claw hammer 16oz, fibreglass shaft", "gtin": "5099876543210", "casePack": 12, "caseWeightKg": "9.8", "hazardous": false }
+    ],
+    "documents": [
+      { "documentId": "company-profile.pdf", "type": "COMPANY_PROFILE",
+        "text": "BROOKVALE HARDWARE LTD\nCompany number 07723344\nRegistered office: 12 Mill Lane, Sheffield\nTrading since 2009." },
+      { "documentId": "product-list.pdf", "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nBRK-HAM-16  Claw hammer 16oz, fibreglass shaft  GTIN 5099876543210  case pack 12  9.8kg" },
+      { "documentId": "insurance.pdf", "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-9988776\nInsured: Brookvale Hardware Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 10,000,000 any one occurrence\nTerritorial limits: United Kingdom and Ireland\nPeriod of insurance: 1 March 2026 to 28 February 2029" },
+      { "documentId": "accounts.pdf", "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 8.4m. Net assets GBP 2.2m. Filed on time. Unqualified audit opinion." },
+      { "documentId": "edi-form.pdf", "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nWe transmit EDIFACT DESADV advance ship notices 48 hours before despatch.\nWe receive EDIFACT ORDERS. Lead time 7 days." },
+      { "documentId": "gs1.pdf", "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nBrookvale Hardware Ltd\nCompany prefix: 5099876\nValid to 31 December 2029" },
+      { "documentId": "audit.pdf", "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: 12 Mill Lane, Sheffield\nGrade: A\nNon-conformances raised: none\nAudit date: 2 June 2026" }
+    ]
+  },
+  "expected": []
+}

@@ -110,7 +110,12 @@ public class SpringAiReviewModel implements ReviewModel {
         // Never degrade to an empty list. An empty list means the reviewer
         // looked and found nothing; this means nobody looked, and the caller
         // has to escalate rather than record a clean review.
-        throw new ReviewModelException("model could not complete the review", last);
+        // The original message carries the quota id, which is what
+        // distinguishes a per-minute limit from a daily one. Losing it here
+        // would make every failure look identical in the audit trail.
+        throw new ReviewModelException(
+                "model could not complete the review: "
+                        + (last == null ? "unknown" : last.getMessage()), last);
     }
 
     /**

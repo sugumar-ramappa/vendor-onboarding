@@ -1,0 +1,40 @@
+{
+  "id": "F01",
+  "description": "Certificate is valid and correctly cited, but its scope does not cover the SKU being applied for",
+  "clean": false,
+  "applicationJson": {
+    "applicationId": "F01-APP",
+    "vendorName": "Acme Tools Ltd",
+    "category": "POWER_TOOLS",
+    "deliveryModel": "DISTRIBUTION_CENTRE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      { "vendorSku": "ACM-DRL-18V", "description": "18V cordless drill, 2Ah battery, 2-pack", "gtin": "5012345678900", "casePack": 6, "caseWeightKg": "12.4", "hazardous": false }
+    ],
+    "documents": [
+      { "documentId": "company-profile.pdf", "type": "COMPANY_PROFILE",
+        "text": "ACME TOOLS LTD\nCompany number 08812345\nRegistered office: Unit 4, Brookfield Industrial Estate\nTrading since 2011." },
+      { "documentId": "product-list.pdf", "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nACM-DRL-18V  18V cordless drill, 2Ah battery, 2-pack  GTIN 5012345678900  case pack 6" },
+      { "documentId": "elec-cert.pdf", "type": "ELECTRICAL_SAFETY_CERTIFICATE",
+        "text": "ELECTRICAL SAFETY CERTIFICATE\nCertificate No: ESC-2024-88213\nIssued to: Acme Tools Ltd\n\nScope of certification:\n  Hand tools and non-powered garden implements\n\nTested to: EN 62841\nDate of issue: 3 March 2024\nValid until: 12 April 2028" },
+      { "documentId": "conformity.pdf", "type": "DECLARATION_OF_CONFORMITY",
+        "text": "DECLARATION OF CONFORMITY\nAcme Tools Ltd declares that the products listed conform to the applicable standards." },
+      { "documentId": "insurance.pdf", "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-4471029\nInsured: Acme Tools Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 10,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2028" },
+      { "documentId": "accounts.pdf", "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 14.2m. Net assets GBP 3.1m. Filed on time. No qualifications." },
+      { "documentId": "edi-form.pdf", "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nWe transmit EDIFACT DESADV advance ship notices 24 hours before despatch.\nWe receive EDIFACT ORDERS." },
+      { "documentId": "gs1.pdf", "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nAcme Tools Ltd\nCompany prefix: 5012345\nValid to 31 December 2028" },
+      { "documentId": "audit.pdf", "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: Unit 4, Brookfield Industrial Estate\nGrade: A\nNon-conformances raised: none\nAudit date: 14 May 2026" }
+    ]
+  },
+  "expected": [
+    { "area": "COMPLIANCE", "minSeverity": "MAJOR", "sku": "ACM-DRL-18V",
+      "mustMention": ["scope"],
+      "note": "The judgement no rule engine can make. Everything deterministic about this certificate passes - it is valid, in date, and cites an accepted standard. It is only wrong because 'hand tools and non-powered garden implements' does not cover a cordless drill." }
+  ]
+}

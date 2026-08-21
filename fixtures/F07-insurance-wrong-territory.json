@@ -1,0 +1,70 @@
+{
+  "id": "F07",
+  "description": "Ample cover that excludes the territory we sell in",
+  "clean": false,
+  "applicationJson": {
+    "applicationId": "F07-APP",
+    "vendorName": "Nordvik Verktyg AB",
+    "category": "HAND_TOOLS",
+    "deliveryModel": "DISTRIBUTION_CENTRE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "NOR-CHS-06",
+        "description": "Wood chisel set, 6 piece",
+        "gtin": "7350001000013",
+        "casePack": 10,
+        "caseWeightKg": "6.2",
+        "hazardous": false
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "NORDVIK VERKTYG AB\nCompany number 08123456\nRegistered office: 1 Trade Park, Leeds\nTrading since 2010."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nSee attached schedule."
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-7350001\nInsured: Nordvik Verktyg AB\nPublic Liability:  GBP 20,000,000 any one occurrence\nProduct Liability: GBP 20,000,000 any one occurrence\nTerritorial limits: European Union member states only\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 9.6m. Net assets GBP 2.8m. Filed on time. Unqualified opinion."
+      },
+      {
+        "documentId": "edi-form.pdf",
+        "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nWe transmit EDIFACT DESADV advance ship notices 48 hours before despatch.\nWe receive EDIFACT ORDERS. Lead time 7 days."
+      },
+      {
+        "documentId": "gs1.pdf",
+        "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nNordvik Verktyg AB\nCompany prefix: 7350001\nValid to 31 December 2029"
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: 1 Trade Park, Leeds\nGrade: A\nNon-conformances raised: none\nAudit date: 11 May 2026"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "area": "FINANCE",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "territor"
+      ],
+      "note": "Reads as perfectly adequate until someone checks the small print. Cover excluding where we sell provides nothing."
+    }
+  ]
+}

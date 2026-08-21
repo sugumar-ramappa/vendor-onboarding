@@ -1,0 +1,70 @@
+{
+  "id": "F06",
+  "description": "Product liability cover is GBP 1m against a GBP 5m minimum",
+  "clean": false,
+  "applicationJson": {
+    "applicationId": "F06-APP",
+    "vendorName": "Trentway Fixings Ltd",
+    "category": "HAND_TOOLS",
+    "deliveryModel": "DISTRIBUTION_CENTRE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "TRE-SPN-10",
+        "description": "Adjustable spanner 10in",
+        "gtin": "5077777000011",
+        "casePack": 12,
+        "caseWeightKg": "7.4",
+        "hazardous": false
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "TRENTWAY FIXINGS LTD\nCompany number 08123456\nRegistered office: 1 Trade Park, Leeds\nTrading since 2010."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nSee attached schedule."
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-5077777\nInsured: Trentway Fixings Ltd\nPublic Liability:  GBP 1,000,000 any one occurrence\nProduct Liability: GBP 1,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 9.6m. Net assets GBP 2.8m. Filed on time. Unqualified opinion."
+      },
+      {
+        "documentId": "edi-form.pdf",
+        "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nWe transmit EDIFACT DESADV advance ship notices 48 hours before despatch.\nWe receive EDIFACT ORDERS. Lead time 7 days."
+      },
+      {
+        "documentId": "gs1.pdf",
+        "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nTrentway Fixings Ltd\nCompany prefix: 5077777\nValid to 31 December 2029"
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: 1 Trade Park, Leeds\nGrade: A\nNon-conformances raised: none\nAudit date: 11 May 2026"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "area": "FINANCE",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "liability"
+      ],
+      "note": "The threshold comes from the finance_threshold table, not from what a model assumes cover usually is."
+    }
+  ]
+}

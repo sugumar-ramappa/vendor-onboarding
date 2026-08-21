@@ -1,0 +1,78 @@
+{
+  "id": "F11",
+  "description": "One aerosol in an otherwise ordinary range, with no safety data sheet",
+  "clean": false,
+  "applicationJson": {
+    "applicationId": "F11-APP",
+    "vendorName": "Stanmoor Coatings Ltd",
+    "category": "PAINT_AND_CHEMICALS",
+    "deliveryModel": "DISTRIBUTION_CENTRE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "STA-BRU-02",
+        "description": "Paint brush 2in",
+        "gtin": "5066666000012",
+        "casePack": 24,
+        "caseWeightKg": "3.2",
+        "hazardous": false
+      },
+      {
+        "vendorSku": "STA-SPR-40",
+        "description": "Spray lacquer 400ml aerosol",
+        "gtin": "5066666000029",
+        "casePack": 12,
+        "caseWeightKg": "6.4",
+        "hazardous": true
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "STANMOOR COATINGS LTD\nCompany number 08123456\nRegistered office: 1 Trade Park, Leeds\nTrading since 2010."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nSee attached schedule."
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-5066666\nInsured: Stanmoor Coatings Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 10,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 9.6m. Net assets GBP 2.8m. Filed on time. Unqualified opinion."
+      },
+      {
+        "documentId": "edi-form.pdf",
+        "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nWe transmit EDIFACT DESADV advance ship notices 48 hours before despatch.\nWe receive EDIFACT ORDERS. Lead time 7 days."
+      },
+      {
+        "documentId": "gs1.pdf",
+        "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nStanmoor Coatings Ltd\nCompany prefix: 5066666\nValid to 31 December 2029"
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: 1 Trade Park, Leeds\nGrade: A\nNon-conformances raised: none\nAudit date: 11 May 2026"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "area": "COMPLIANCE",
+      "minSeverity": "MAJOR",
+      "sku": "STA-SPR-40",
+      "mustMention": [
+        "safety data sheet"
+      ],
+      "note": "One aerosol makes the whole delivery hazmat - it changes carrier, storage and store handling."
+    }
+  ]
+}

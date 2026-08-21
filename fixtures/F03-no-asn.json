@@ -1,0 +1,36 @@
+{
+  "id": "F03",
+  "description": "Vendor cannot send an ASN, into a distribution centre. Every delivery would be received blind.",
+  "clean": false,
+  "applicationJson": {
+    "applicationId": "F03-APP",
+    "vendorName": "Kestrel Fixings Ltd",
+    "category": "BUILDING_MATERIALS",
+    "deliveryModel": "DISTRIBUTION_CENTRE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      { "vendorSku": "KES-SCR-100", "description": "Wood screws 4x40mm, box of 100", "gtin": "5011223344556", "casePack": 20, "caseWeightKg": "11.0", "hazardous": false }
+    ],
+    "documents": [
+      { "documentId": "company-profile.pdf", "type": "COMPANY_PROFILE",
+        "text": "KESTREL FIXINGS LTD\nCompany number 09112233\nTrading since 2014." },
+      { "documentId": "product-list.pdf", "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nKES-SCR-100  Wood screws 4x40mm box of 100  GTIN 5011223344556  case pack 20" },
+      { "documentId": "insurance.pdf", "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-2233445\nPublic Liability:  GBP 10,000,000\nProduct Liability: GBP 10,000,000\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2028" },
+      { "documentId": "accounts.pdf", "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 5.1m. Net assets GBP 1.4m. Filed on time." },
+      { "documentId": "edi-form.pdf", "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nVendor: Kestrel Fixings Ltd\nGS1 company prefix: 5011223\n\nWe can receive purchase orders by EDI.\nWe issue invoices by email in PDF format.\n\nAdvance Ship Notice: not currently supported. We expect to implement ASN\ntransmission within 12 months of go-live." },
+      { "documentId": "gs1.pdf", "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nKestrel Fixings Ltd\nCompany prefix: 5011223\nValid to 31 December 2029" },
+      { "documentId": "audit.pdf", "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nGrade: B\nNon-conformances raised: none\nAudit date: 3 April 2026" }
+    ]
+  },
+  "expected": [
+    { "area": "LOGISTICS", "minSeverity": "MAJOR", "sku": null,
+      "mustMention": ["asn"],
+      "note": "The EDI form says so in plain English. A vendor who cannot send an ASN means goods-in does not know what is on the truck until they open it." }
+  ]
+}

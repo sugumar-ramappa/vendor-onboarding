@@ -1,0 +1,70 @@
+{
+  "id": "F08",
+  "description": "One major non-conformance open and overdue, alongside a closed minor one",
+  "clean": false,
+  "applicationJson": {
+    "applicationId": "F08-APP",
+    "vendorName": "Pellow Garden Ltd",
+    "category": "GARDEN_AND_OUTDOOR",
+    "deliveryModel": "DISTRIBUTION_CENTRE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "PEL-SHR-01",
+        "description": "Bypass secateurs",
+        "gtin": "5044444000018",
+        "casePack": 24,
+        "caseWeightKg": "5.8",
+        "hazardous": false
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "PELLOW GARDEN LTD\nCompany number 08123456\nRegistered office: 1 Trade Park, Leeds\nTrading since 2010."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nSee attached schedule."
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-5044444\nInsured: Pellow Garden Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 10,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 9.6m. Net assets GBP 2.8m. Filed on time. Unqualified opinion."
+      },
+      {
+        "documentId": "edi-form.pdf",
+        "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nWe transmit EDIFACT DESADV advance ship notices 48 hours before despatch.\nWe receive EDIFACT ORDERS. Lead time 7 days."
+      },
+      {
+        "documentId": "gs1.pdf",
+        "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nPellow Garden Ltd\nCompany prefix: 5044444\nValid to 31 December 2029"
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: Pellow Garden Ltd, Redruth\nGrade: C\nAudit date: 9 January 2026\n\nNon-conformances:\n  MAJOR - traceability records incomplete for finished goods.\n    Corrective action due 30 April 2026. Status: OPEN, overdue.\n  MINOR - two calibration certificates missing. Status: closed at re-audit."
+      }
+    ]
+  },
+  "expected": [
+    {
+      "area": "QUALITY",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "non-conformance"
+      ],
+      "note": "The distinction that catches people out: two closed minors is a working system, one open overdue major is not - and the count is smaller."
+    }
+  ]
+}

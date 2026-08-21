@@ -1,0 +1,80 @@
+{
+  "id": "F05",
+  "description": "Certificate scope is correct but it expired two years ago",
+  "clean": false,
+  "applicationJson": {
+    "applicationId": "F05-APP",
+    "vendorName": "Halden Power Ltd",
+    "category": "POWER_TOOLS",
+    "deliveryModel": "DISTRIBUTION_CENTRE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "HAL-DRL-12V",
+        "description": "12V cordless drill",
+        "gtin": "5061234000017",
+        "casePack": 6,
+        "caseWeightKg": "9.1",
+        "hazardous": false
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "HALDEN POWER LTD\nCompany number 08123456\nRegistered office: 1 Trade Park, Leeds\nTrading since 2010."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nSee attached schedule."
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-5061234\nInsured: Halden Power Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 10,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 9.6m. Net assets GBP 2.8m. Filed on time. Unqualified opinion."
+      },
+      {
+        "documentId": "edi-form.pdf",
+        "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nWe transmit EDIFACT DESADV advance ship notices 48 hours before despatch.\nWe receive EDIFACT ORDERS. Lead time 7 days."
+      },
+      {
+        "documentId": "gs1.pdf",
+        "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nHalden Power Ltd\nCompany prefix: 5061234\nValid to 31 December 2029"
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: 1 Trade Park, Leeds\nGrade: A\nNon-conformances raised: none\nAudit date: 11 May 2026"
+      },
+      {
+        "documentId": "elec-cert.pdf",
+        "type": "ELECTRICAL_SAFETY_CERTIFICATE",
+        "text": "ELECTRICAL SAFETY CERTIFICATE\nIssued to: Halden Power Ltd\nScope of certification: Cordless power tools and chargers\nTested to: EN 62841\nDate of issue: 1 February 2021\nValid until: 31 January 2024"
+      },
+      {
+        "documentId": "conformity.pdf",
+        "type": "DECLARATION_OF_CONFORMITY",
+        "text": "DECLARATION OF CONFORMITY\nConforms to EN 62841."
+      }
+    ]
+  },
+  "expected": [
+    {
+      "area": "COMPLIANCE",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "expire"
+      ],
+      "note": "Arithmetic, not judgement - the expiry was extracted deterministically and handed to the reviewer."
+    }
+  ]
+}

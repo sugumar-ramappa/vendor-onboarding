@@ -162,6 +162,12 @@ public class ReviewerAgent {
         String causeMessage = cause == null ? "" : String.valueOf(cause.getMessage()).toLowerCase();
         String all = message + " " + causeMessage;
 
+        // Order matters: a daily quota failure also mentions "quota" and
+        // "429", so it has to be recognised before the per-minute case.
+        if (all.contains("perday") || all.contains("per day")
+                || all.contains("daily limit")) {
+            return AuditEntry.Outcome.QUOTA_EXHAUSTED;
+        }
         if (all.contains("rate") || all.contains("quota") || all.contains("429")
                 || all.contains("resource_exhausted")) {
             return AuditEntry.Outcome.RATE_LIMITED;

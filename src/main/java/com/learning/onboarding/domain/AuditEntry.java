@@ -50,8 +50,18 @@ public record AuditEntry(
     public enum Outcome {
         /** The call completed and returned usable findings. */
         OK,
-        /** Rate limited. Clears on its own; worth retrying. */
+        /** Per-minute rate limit. Clears when the window rolls; worth retrying. */
         RATE_LIMITED,
+        /**
+         * The daily quota is spent.
+         *
+         * <p>Distinct from RATE_LIMITED because the operational response is
+         * completely different: a per-minute limit clears in a minute, this
+         * clears at midnight. Retrying it burns wall clock to fail again, and
+         * an operator reading "rate limited" would reasonably assume waiting
+         * briefly is enough.
+         */
+        QUOTA_EXHAUSTED,
         /** Timed out or the model was unreachable. */
         UNAVAILABLE,
         /** Returned something that would not bind to the expected type. */
