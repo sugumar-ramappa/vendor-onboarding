@@ -97,6 +97,19 @@ onboarding:
       # image without improving the transcription.
       dpi: 200
 
+  model:
+    # Retry, with a first wait past one minute. The free tier limits requests
+    # per MINUTE, so a shorter wait is a guaranteed second failure - the window
+    # has to roll over. A conventional 1s backoff burns three attempts and
+    # reports the reviewer as failed.
+    max-attempts: 3
+    first-backoff-ms: 35000
+    # Concurrent model calls. 3 still rate-limited on the free tier; 2 leaves
+    # headroom for the retries above. A rate-limited reviewer is a reviewer that
+    # did not run, which forces the whole application to a human - so slower and
+    # complete beats faster and half-reviewed.
+    concurrency: 2
+
   limits:
     # Caps that stop a crafted document driving an expensive agent loop.
     max-graph-steps: 20

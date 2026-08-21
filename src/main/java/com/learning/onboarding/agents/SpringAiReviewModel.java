@@ -13,21 +13,26 @@ import java.util.List;
 /**
  * The real model call: Spring AI, Gemini, with the reference tools attached.
  *
- * <p>Two things happen here that are worth naming.
- *
  * <h2>The return type is the schema</h2>
  * {@code .entity(ReviewOutput.class)} makes Spring AI derive a JSON schema from
  * the record and instruct the model to fill it in. {@link AgentFinding} has no
  * field for approval, so the model has nowhere to put one - the guardrail is the
  * type, not an instruction that could be argued with.
  *
- * <p>It also means a malformed response is a binding failure rather than
- * something to salvage with string handling.
- *
  * <h2>Tools, not pasted rules</h2>
  * The reference lookups are attached as tool callbacks, so the model fetches the
  * rules that apply rather than being handed every rule for every category. They
  * run over the read-only connection, so a tool call cannot change anything.
+ *
+ * <h2>Retry, and why the first wait is 30 seconds</h2>
+ * The free tier limits requests per MINUTE. Retrying inside the same minute is
+ * guaranteed to fail again - the window has to roll over first. A conventional
+ * 1-second backoff therefore burns three attempts achieving nothing and reports
+ * the reviewer as failed, which forces the whole application to a human.
+ *
+ * <p>This cost a day on the retrieval project in this workspace before the
+ * distinction was understood, so it is worth stating plainly: <b>a per-minute
+ * limit is not a transient error, it is a scheduled one.</b>
  */
 @Component
 public class SpringAiReviewModel implements ReviewModel {
@@ -50,34 +55,90 @@ public class SpringAiReviewModel implements ReviewModel {
     private final ChatClient chat;
     private final ToolCallback[] tools;
     private final String modelName;
+    private final int maxAttempts;
+    private final long firstBackoffMs;
 
-    public SpringAiReviewModel(ChatClient.Builder builder,
-                               ToolCallback[] referenceDataCallbacks,
-                               @Value("${spring.ai.google.genai.chat.options.model}") String modelName) {
+    public SpringAiReviewModel(
+            ChatClient.Builder builder,
+            ToolCallback[] referenceDataCallbacks,
+            @Value("${spring.ai.google.genai.chat.options.model}") String modelName,
+            @Value("${onboarding.model.max-attempts:3}") int maxAttempts,
+            @Value("${onboarding.model.first-backoff-ms:35000}") long firstBackoffMs) {
         this.chat = builder.build();
         this.tools = referenceDataCallbacks;
         this.modelName = modelName;
+        this.maxAttempts = maxAttempts;
+        this.firstBackoffMs = firstBackoffMs;
     }
 
     @Override
     public List<AgentFinding> review(String systemPrompt, String userPrompt) {
-        try {
-            ReviewOutput output = chat.prompt()
-                    .system(systemPrompt)
-                    .user(userPrompt)
-                    .toolCallbacks(tools)
-                    .call()
-                    .entity(ReviewOutput.class);
+        RuntimeException last = null;
 
-            return output == null ? List.of() : output.findings();
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                ReviewOutput output = chat.prompt()
+                        .system(systemPrompt)
+                        .user(userPrompt)
+                        .toolCallbacks(tools)
+                        .call()
+                        .entity(ReviewOutput.class);
 
-        } catch (RuntimeException e) {
-            // Never degrade to an empty list. An empty list means the reviewer
-            // looked and found nothing; this means nobody looked, and the
-            // caller has to escalate rather than record a clean review.
-            log.warn("review call failed: {}", e.getMessage());
-            throw new ReviewModelException("model could not complete the review", e);
+                return output == null ? List.of() : output.findings();
+
+            } catch (RuntimeException e) {
+                last = e;
+
+                if (!isRetryable(e) || attempt == maxAttempts) {
+                    break;
+                }
+                // 35s, 70s. Deliberately past a minute on the second attempt:
+                // the per-minute window has to roll over, and waiting less than
+                // that is a guaranteed second failure.
+                long wait = firstBackoffMs * attempt;
+                log.warn("model call failed (attempt {}/{}), waiting {}ms: {}",
+                        attempt, maxAttempts, wait, e.getMessage());
+                try {
+                    Thread.sleep(wait);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
         }
+
+        // Never degrade to an empty list. An empty list means the reviewer
+        // looked and found nothing; this means nobody looked, and the caller
+        // has to escalate rather than record a clean review.
+        throw new ReviewModelException("model could not complete the review", last);
+    }
+
+    /**
+     * Whether waiting could plausibly help.
+     *
+     * <p>A daily quota clears at midnight, not in a minute, so retrying it just
+     * burns wall clock to fail again. Same distinction the retrieval project
+     * needed, and for the same reason.
+     */
+    private static boolean isRetryable(RuntimeException e) {
+        String text = describe(e).toLowerCase();
+
+        if (text.contains("perday") || text.contains("per day")
+                || text.contains("daily limit")) {
+            return false;
+        }
+        return text.contains("429") || text.contains("rate")
+                || text.contains("quota") || text.contains("resource_exhausted")
+                || text.contains("unavailable") || text.contains("timeout")
+                || text.contains("503") || text.contains("deadline");
+    }
+
+    private static String describe(Throwable t) {
+        StringBuilder sb = new StringBuilder();
+        for (Throwable current = t; current != null; current = current.getCause()) {
+            sb.append(current.getMessage()).append(' ');
+        }
+        return sb.toString();
     }
 
     @Override

@@ -44,13 +44,20 @@ public class ReviewerAgent {
     private final String promptVersion;
     private final PromptLibrary prompts;
     private final ReviewModel model;
+    private final ReviewCache cache;
 
     public ReviewerAgent(ReviewArea area, String promptVersion,
                          PromptLibrary prompts, ReviewModel model) {
+        this(area, promptVersion, prompts, model, ReviewCache.NONE);
+    }
+
+    public ReviewerAgent(ReviewArea area, String promptVersion, PromptLibrary prompts,
+                         ReviewModel model, ReviewCache cache) {
         this.area = area;
         this.promptVersion = promptVersion;
         this.prompts = prompts;
         this.model = model;
+        this.cache = cache;
         // Fail at construction if the prompt is missing, not on the first
         // review. A reviewer with no instructions still produces findings.
         prompts.get(promptVersion);
@@ -81,6 +88,20 @@ public class ReviewerAgent {
         Instant startedAt = Instant.now();
         long start = System.currentTimeMillis();
 
+        // Everything that could change the answer is in the key: area, prompt
+        // version, model, and the rendered prompt with its documents. A hit
+        // means this exact question has already been asked of this exact model.
+        String cacheKey = ReviewCache.key(
+                area.name(), promptVersion, model.modelName(), userPrompt);
+
+        var hit = cache.get(cacheKey);
+        if (hit.isPresent()) {
+            log.info("{} served {} from cache (original call took {}ms)",
+                    area, context.applicationId(), hit.get().originalLatencyMs());
+            return outcome(hit.get().findings(), callId, context, fullPrompt,
+                    hit.get().originalLatencyMs(), startedAt);
+        }
+
         List<AgentFinding> proposed;
         try {
             proposed = model.review(systemPrompt, userPrompt);
@@ -99,6 +120,18 @@ public class ReviewerAgent {
         log.info("{} reviewed {} in {}ms, {} finding(s), prompt {}",
                 area, context.applicationId(), elapsed, proposed.size(), promptVersion);
 
+        // Only successful calls are cached. Caching a failure would turn a
+        // transient rate limit into a permanent one for this application.
+        cache.put(cacheKey, area.name(), promptVersion, model.modelName(),
+                proposed, elapsed);
+
+        return outcome(proposed, callId, context, fullPrompt, elapsed, startedAt);
+    }
+
+    /** Wraps the model's findings with the things the model may not assert. */
+    private ReviewOutcome outcome(List<AgentFinding> proposed, UUID callId,
+                                  ReviewContext context, String fullPrompt,
+                                  long elapsed, Instant startedAt) {
         FindingSource source = new FindingSource(
                 callId, promptVersion, model.modelName(), Instant.now());
 

@@ -4,6 +4,7 @@ import com.learning.onboarding.domain.ReviewArea;
 import com.learning.onboarding.graph.ConflictDetector;
 import com.learning.onboarding.graph.ReviewGraph;
 import org.bsc.langgraph4j.GraphStateException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -18,35 +19,47 @@ import java.util.List;
  * rules exist in exactly one place.
  *
  * <p>Prompt versions are named here on purpose. Changing a reviewer's behaviour
- * means creating {@code compliance-v2.txt} and editing this line - a diff that
- * shows up in review, rather than an edit to a file nobody is watching.
+ * means creating a new prompt file and editing this line - a diff that shows up
+ * in review, rather than an edit to a file nobody is watching.
+ *
+ * <p><b>v2 exists because v1 did not say what to do with skuRef for a
+ * vendor-level finding.</b> The model invented "ALL", which made two unrelated
+ * findings look like two opinions about the same SKU and produced a false
+ * conflict. v1 is kept unchanged so the findings already stored against it can
+ * still be explained - which is the entire reason prompts are versioned rather
+ * than edited.
  */
 @Configuration
 public class ReviewerAgentsConfig {
 
     @Bean
-    public ReviewerAgent complianceReviewer(PromptLibrary prompts, ReviewModel model) {
-        return new ReviewerAgent(ReviewArea.COMPLIANCE, "compliance-v1", prompts, model);
+    public ReviewerAgent complianceReviewer(PromptLibrary prompts, ReviewModel model,
+                                          ReviewCache cache) {
+        return new ReviewerAgent(ReviewArea.COMPLIANCE, "compliance-v2", prompts, model, cache);
     }
 
     @Bean
-    public ReviewerAgent qualityReviewer(PromptLibrary prompts, ReviewModel model) {
-        return new ReviewerAgent(ReviewArea.QUALITY, "quality-v1", prompts, model);
+    public ReviewerAgent qualityReviewer(PromptLibrary prompts, ReviewModel model,
+                                          ReviewCache cache) {
+        return new ReviewerAgent(ReviewArea.QUALITY, "quality-v2", prompts, model, cache);
     }
 
     @Bean
-    public ReviewerAgent completenessReviewer(PromptLibrary prompts, ReviewModel model) {
-        return new ReviewerAgent(ReviewArea.COMPLETENESS, "completeness-v1", prompts, model);
+    public ReviewerAgent completenessReviewer(PromptLibrary prompts, ReviewModel model,
+                                          ReviewCache cache) {
+        return new ReviewerAgent(ReviewArea.COMPLETENESS, "completeness-v2", prompts, model, cache);
     }
 
     @Bean
-    public ReviewerAgent logisticsReviewer(PromptLibrary prompts, ReviewModel model) {
-        return new ReviewerAgent(ReviewArea.LOGISTICS, "logistics-v1", prompts, model);
+    public ReviewerAgent logisticsReviewer(PromptLibrary prompts, ReviewModel model,
+                                          ReviewCache cache) {
+        return new ReviewerAgent(ReviewArea.LOGISTICS, "logistics-v2", prompts, model, cache);
     }
 
     @Bean
-    public ReviewerAgent financeReviewer(PromptLibrary prompts, ReviewModel model) {
-        return new ReviewerAgent(ReviewArea.FINANCE, "finance-v1", prompts, model);
+    public ReviewerAgent financeReviewer(PromptLibrary prompts, ReviewModel model,
+                                          ReviewCache cache) {
+        return new ReviewerAgent(ReviewArea.FINANCE, "finance-v2", prompts, model, cache);
     }
 
     /**
@@ -54,9 +67,11 @@ public class ReviewerAgentsConfig {
      * sixth review area is one bean method and nothing else.
      */
     @Bean
-    public ReviewGraph reviewGraph(List<ReviewerAgent> reviewers,
-                                   ConflictDetector conflictDetector)
+    public ReviewGraph reviewGraph(
+            List<ReviewerAgent> reviewers,
+            ConflictDetector conflictDetector,
+            @Value("${onboarding.model.concurrency:2}") int concurrency)
             throws GraphStateException {
-        return new ReviewGraph(reviewers, ReviewGraph.DEFAULT_CONCURRENCY, conflictDetector);
+        return new ReviewGraph(reviewers, concurrency, conflictDetector);
     }
 }
