@@ -47,6 +47,8 @@ public class ReviewState extends AgentState {
     public static final String FAILURES = "failures";
     public static final String CONFLICTS = "conflicts";
     public static final String AUDIT = "audit";
+    public static final String VERIFIED = "verified";
+    public static final String DISCARDED = "discarded";
     public static final String TRACE = "trace";
 
     /** Declares how each key merges. Keys absent from this map replace on write. */
@@ -55,6 +57,7 @@ public class ReviewState extends AgentState {
             FAILURES, Channels.<String>appenderWithDuplicate(List::of),
             CONFLICTS, Channels.<Conflict>appenderWithDuplicate(List::of),
             AUDIT, Channels.<AuditEntry>appenderWithDuplicate(List::of),
+            DISCARDED, Channels.<String>appenderWithDuplicate(List::of),
             TRACE, Channels.<String>appenderWithDuplicate(List::of)
     );
 
@@ -100,6 +103,32 @@ public class ReviewState extends AgentState {
     /** Reviewers that could not run. Not the same as reviewers that found nothing. */
     public List<String> failures() {
         return this.<List<String>>value(FAILURES).orElseGet(List::of);
+    }
+
+    /**
+     * Findings after verification, with their verdicts.
+     *
+     * <p>Falls back to the raw findings when verification has not run, so a
+     * caller never sees an empty list merely because the verifier was disabled.
+     */
+    public List<ReviewFinding> verifiedFindings() {
+        return this.<List<ReviewFinding>>value(VERIFIED).orElseGet(this::findings);
+    }
+
+    /** Findings that survived challenge - what a human actually reads. */
+    public List<ReviewFinding> survivingFindings() {
+        return verifiedFindings().stream().filter(ReviewFinding::survives).toList();
+    }
+
+    /**
+     * Findings thrown out because their citation was not in the document.
+     *
+     * <p>Recorded rather than silently dropped: a reviewer producing fabricated
+     * citations is a prompt problem worth knowing about, and it is invisible if
+     * the findings simply disappear.
+     */
+    public List<String> discarded() {
+        return this.<List<String>>value(DISCARDED).orElseGet(List::of);
     }
 
     /** Which nodes ran, in order. Cheap observability while building. */

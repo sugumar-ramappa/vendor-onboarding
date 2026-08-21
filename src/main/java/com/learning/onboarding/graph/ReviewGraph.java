@@ -3,6 +3,9 @@ package com.learning.onboarding.graph;
 import com.learning.onboarding.agents.ReviewContext;
 import com.learning.onboarding.agents.ReviewOutcome;
 import com.learning.onboarding.agents.ReviewerAgent;
+import com.learning.onboarding.agents.VerifierAgent;
+import com.learning.onboarding.domain.ReviewFinding;
+import com.learning.onboarding.domain.Verdict;
 import com.learning.onboarding.domain.Conflict;
 import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.GraphStateException;
@@ -65,6 +68,8 @@ public class ReviewGraph {
     private final CompiledGraph<ReviewState> graph;
     private final ExecutorService pool;
     private final java.util.concurrent.Semaphore limit;
+    private final GroundingCheck groundingCheck;
+    private final VerifierAgent verifier;
 
     public ReviewGraph(List<ReviewerAgent> reviewers) throws GraphStateException {
         this(reviewers, DEFAULT_CONCURRENCY);
@@ -88,6 +93,15 @@ public class ReviewGraph {
     public ReviewGraph(List<ReviewerAgent> reviewers, int concurrency,
                        ConflictDetector conflictDetector)
             throws GraphStateException {
+        this(reviewers, concurrency, conflictDetector, new GroundingCheck(), null);
+    }
+
+    public ReviewGraph(List<ReviewerAgent> reviewers, int concurrency,
+                       ConflictDetector conflictDetector,
+                       GroundingCheck groundingCheck, VerifierAgent verifier)
+            throws GraphStateException {
+        this.groundingCheck = groundingCheck;
+        this.verifier = verifier;
         if (reviewers.isEmpty()) {
             throw new IllegalArgumentException("a review graph with no reviewers reviews nothing");
         }
@@ -141,8 +155,16 @@ public class ReviewGraph {
                     : Map.of(ReviewState.CONFLICTS, conflicts, ReviewState.TRACE, "gather");
         }));
 
+        // Verification runs after gather, so it sees every finding. Grounding
+        // is checked first because it is free and catches the worst failure -
+        // a fabricated citation - without spending a model call.
+        AsyncNodeAction<ReviewState> verify = state ->
+                CompletableFuture.supplyAsync(() -> verifyFindings(state), pool);
+        builder.addNode("verify", verify);
+
         builder.addEdge(START, "intake");
-        builder.addEdge("gather", END);
+        builder.addEdge("gather", "verify");
+        builder.addEdge("verify", END);
 
         this.graph = builder.compile();
     }
@@ -193,6 +215,72 @@ public class ReviewGraph {
         } finally {
             limit.release();
         }
+    }
+
+    /**
+     * Checks every finding, cheaply first.
+     *
+     * <pre>
+     *   grounding check (free)   →  UNGROUNDED  →  discarded, and recorded
+     *                            →  UNVERIFIABLE →  survives, flagged for a human
+     *                            →  GROUNDED    →  worth challenging?
+     *                                                 no  → survives unchallenged
+     *                                                 yes → adversarial challenge
+     * </pre>
+     *
+     * <p>The ordering is deliberate. A fabricated citation is the worst thing
+     * this system can produce, and catching it costs a substring search rather
+     * than a model call - so nothing is spent challenging a finding that was
+     * never grounded in the first place.
+     */
+    private Map<String, Object> verifyFindings(ReviewState state) {
+        if (verifier == null) {
+            return Map.of(ReviewState.TRACE, "verify (disabled)");
+        }
+        List<ReviewFinding> verified = new java.util.ArrayList<>();
+        List<String> discarded = new java.util.ArrayList<>();
+
+        for (ReviewFinding finding : state.findings()) {
+            GroundingCheck.Result grounding = groundingCheck.check(finding, state.context());
+
+            if (grounding == GroundingCheck.Result.UNGROUNDED) {
+                // Not "challenged and refuted" - never admissible at all. A
+                // finding quoting text that is not in the document is
+                // fabricated, and no amount of challenge makes it usable.
+                discarded.add("%s: quote not found in the cited document".formatted(
+                        finding.findingId()));
+                continue;
+            }
+
+            if (grounding == GroundingCheck.Result.UNVERIFIABLE) {
+                // Read from a scan, so there is no source text to match. Kept,
+                // and marked so a human knows the citation could not be checked.
+                verified.add(finding.withVerdict(Verdict.survives(
+                        "citation could not be verified - the document was "
+                                + "transcribed from a scan")));
+                continue;
+            }
+
+            if (!VerifierAgent.worthChallenging(finding)) {
+                // Nobody rejects a vendor over an INFO finding, so a model call
+                // spent challenging one buys nothing.
+                verified.add(finding);
+                continue;
+            }
+            verified.add(finding.withVerdict(verifier.challenge(finding, state.context())));
+        }
+
+        long refuted = verified.stream().filter(f -> !f.survives()).count();
+        log.info("{}: {} finding(s) verified, {} refuted, {} discarded as ungrounded",
+                state.applicationId(), verified.size(), refuted, discarded.size());
+
+        Map<String, Object> updates = new java.util.HashMap<>();
+        updates.put(ReviewState.VERIFIED, verified);
+        updates.put(ReviewState.TRACE, "verify");
+        if (!discarded.isEmpty()) {
+            updates.put(ReviewState.DISCARDED, discarded);
+        }
+        return updates;
     }
 
     /** Runs the pipeline. */
