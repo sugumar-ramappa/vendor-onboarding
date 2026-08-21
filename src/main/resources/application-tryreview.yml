@@ -1,0 +1,13 @@
+# Profile for one real review against the live model.
+#
+# Web server off so the run finishes and exits rather than leaving Tomcat up.
+spring:
+  main:
+    web-application-type: none
+
+logging:
+  level:
+    root: WARN
+    com.learning.onboarding: INFO
+    # Shows which reference tools the model chose to call, and with what.
+    com.learning.onboarding.mcp: DEBUG
