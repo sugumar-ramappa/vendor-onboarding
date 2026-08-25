@@ -28,11 +28,19 @@ flowchart TD
 
     subgraph GRAPH["LangGraph4j"]
         direction TB
-        G1["intake"]
-        G2["5 reviewers, concurrent<br/><i>isolated contexts</i>"]
-        G3["gather + ConflictDetector"]
+        G1["completeness gate<br/><i>is the pack usable?</i>"]
+        G0["requestDocuments<br/><b>4 reviewers skipped</b>"]
+        G2["4 reviewers, concurrent<br/><i>isolated contexts</i>"]
+        G3["gather + ConflictDetector<br/><i>runs once</i>"]
         G4["verify<br/><i>grounding, then challenge</i>"]
-        G1 --> G2 --> G3 --> G4
+        GM["gatherMore<br/><i>fetch what the verifier asked for</i>"]
+        G5["decide<br/><i>plain Java</i>"]
+        G6["PAUSE<br/><i>checkpointed</i>"]
+        G1 -->|incomplete| G0
+        G1 -->|complete| G2 --> G3 --> G4
+        G4 -->|unresolved, max 2| GM
+        GM --> G4
+        G4 -->|decided| G5 -->|needs a human| G6
     end
 
     GRAPH --> REPO["ReviewRepository<br/><i>findings · evidence · conflicts · audit</i>"]
@@ -72,10 +80,18 @@ certificate first colours every later judgement. That is prevented twice:
 database role has no `SELECT` on `review_finding`. **The permission is the one
 that survives someone editing the class.**
 
-The fourth condition — cycles — is why LangGraph4j rather than
-`CompletableFuture.allOf`. The verifier can send work back, and
-`langgraph4j-postgres-saver` checkpoints state so a review can pause for a human
-and resume.
+**And the fan-out is not what justifies the graph library.** Running four things
+concurrently is `CompletableFuture.allOf` in ten lines, and claiming otherwise
+invites the obvious follow-up. Three other things in this flow are not:
+
+| | Needs | Why hand-rolling it hurts |
+|---|---|---|
+| A gate that skips the rest of the pipeline | **conditional edge** | an `if` around the fan-out, until there are three such gates |
+| A verifier that sends work back for another pass | **a cycle** | a `while` loop wrapped around a concurrent stage, with its own bound and its own state |
+| Pausing days for a human, then resuming | **checkpointing** | serialising in-flight state, a resume path, and no way to test it |
+
+The third is the one that would be genuinely unpleasant. It is also why every
+domain record here implements `Serializable`.
 
 ---
 
@@ -176,23 +192,108 @@ key and is reviewed again, which is correct.
 
 ```mermaid
 flowchart TD
-    START([START]) --> I[intake]
-    I --> C1[completeness]
-    I --> C2[compliance]
-    I --> C3[quality]
-    I --> C4[logistics]
-    I --> C5[finance]
-    C1 --> G[gather]
-    C2 --> G
+    START([START]) --> C1[completeness]
+    C1 -->|incomplete| RD[requestDocuments]
+    RD --> E([END])
+    C1 -->|complete| F[fanOut]
+    F --> C2[compliance]
+    F --> C3[quality]
+    F --> C4[logistics]
+    F --> C5[finance]
+    C2 --> G[gather]
     C3 --> G
     C4 --> G
     C5 --> G
     G --> V[verify]
-    V --> E([END])
+    V -->|unresolved, pass &lt; 2| GM[gatherMore]
+    GM --> V
+    V -->|decided| D[decide]
+    D -->|clean| E
+    D -->|needs a human| H["humanReview<br/>PAUSE"]
+    H --> E
 
-    style C2 fill:#1e3a5f,color:#fff
-    style V fill:#5f1e1e,color:#fff
+    style C1 fill:#4a3a0f,color:#fff
+    style GM fill:#5f1e1e,color:#fff
+    style H fill:#14532d,color:#fff
 ```
+
+### The three features, and what each is actually worth
+
+**The gate (conditional edge).** A pack missing three mandatory documents does
+not need four reviewers arguing about its contents — it needs the documents.
+Skipping them saves four model calls and about two minutes, and incomplete
+submissions are the common case. It also stops the system asking for documents
+one at a time, which is what turns a two-week delay into an eight-week one.
+
+**The verify cycle.** When the verifier cannot decide, it names the *specific*
+thing that would settle it — not "more information" but *"whether policy
+PL-4471029 has a territorial endorsement"*. `gatherMore` then reads the
+retailer's rulebook for this category and delivery model and hands it back, and
+`verify` looks again with it. Findings that would otherwise land on a person's
+desk get settled by a SQL query.
+
+Three ways out of the loop, and only one of them is the counter:
+
+| Exit | Means |
+|---|---|
+| nothing unresolved | the cycle did its job |
+| nothing left to fetch | another pass would ask the same question with the same information |
+| `verifyPasses == 2` | a backstop, not the schedule |
+
+The middle one is the honest convergence condition. Without it the loop runs to
+the bound every time and pays for it.
+
+**Two cost rules the cycle has to obey**, or it is worse than not having it:
+
+- **The rulebook is fetched lazily.** It could be pasted into all five reviewer
+  prompts up front, which would remove the need for the cycle — and would be
+  paid on every review of every application, for a slice needed only by
+  contested findings. Longer prompts also measurably dilute attention on the
+  documents the reviewer is meant to be reading.
+- **A later pass re-challenges only what is still open.** Re-verifying the whole
+  set is 2N model calls to learn nothing new about N−1 of them.
+
+**The verifier names what it needs from a closed set**, so the fetch is targeted
+without a model ever choosing a query:
+
+```java
+public enum EvidenceNeed { REQUIRED_DOCUMENTS, COMPLIANCE_RULES,
+                           LOGISTICS_REQUIREMENTS, FINANCE_THRESHOLDS }
+```
+
+It returns *both* — prose for the audit trail (*"whether policy PL-4471029 has a
+territorial endorsement"*) and an enum value that actually drives the lookup. The
+prose is never parsed.
+
+The two alternatives are both worse in the same way:
+
+| | Problem |
+|---|---|
+| Keyword-match the sentence | "endorsement" matches no column; a pile of synonyms that silently fetches the wrong table on any new phrasing |
+| A model call to route it | an extra call per pass, an extra failure mode, and a path where wording from a vendor's PDF influences which query runs |
+
+An enum has neither. The model picks a valid name or the response fails to bind.
+
+**And it makes the fetch narrow enough to justify itself** — one table instead of
+four. That is the difference between *"we fetched what it asked for"* and *"we
+fetched everything and hoped"*.
+
+**An empty `needs` is a real answer.** It means nothing in the rulebook would
+settle this, so no pass is spent discovering that: the finding survives and goes
+to a person.
+
+**The pause.** Anything blocking checkpoints and stops. A person decides on
+Thursday and the run resumes where it stopped, rather than re-reviewing
+everything or holding a request open for two days.
+
+```java
+.interruptBefore(HUMAN_REVIEW_NODE)   // stop BEFORE, so nothing is decided
+.recursionLimit(40)                   // backstop if the pass counter breaks
+```
+
+Resuming is `GraphInput.resume()`, **not** an empty argument map — the map is
+read as the input to a *new* run, which starts again at the gate and pays for
+every reviewer twice. The only symptom is a slow resume and a bill.
 
 ### The fan-out is genuinely concurrent — and that took a fix
 
@@ -235,6 +336,37 @@ running twice through a cycle — would be silently lost.
 
 **`FAILURES` is a separate channel from `FINDINGS`**, so a reviewer that could
 not run never looks like one that found nothing.
+
+### The channel bug that only appears once a node sits before the fan-out
+
+Adding the completeness gate silently broke every count in the system. Five
+reviewers, five findings — and `findings().size()` returned 6.
+
+The gate did **not** run twice; a print inside it proved that. What happens is
+that when LangGraph4j merges the four parallel branches, it re-applies the
+updates recorded *before* the fork. Against a replace channel that is a no-op.
+Against an appender it is not: every pre-fork value lands twice.
+
+```java
+// Written by the gate, which runs BEFORE the fork.
+// Absent from SCHEMA, so it replaces - and re-applying a replace is idempotent.
+public static final String GATE_FINDINGS = "gateFindings";
+
+public List<ReviewFinding> findings() {
+    return join(GATE_FINDINGS, FINDINGS);   // callers see one list
+}
+```
+
+The reason it is worth telling: **nothing threw, and both copies were identical
+and individually valid.** The gate's finding was simply counted twice, which
+would have shifted every precision number in the measurement without leaving a
+trace. The regression test is one line — no node may appear twice in a run with
+no cycle.
+
+The general rule this produced, which also covers checkpoint replay:
+
+> A node's channel must be **idempotent under re-application** unless the node
+> sits somewhere re-application cannot happen.
 
 ---
 

@@ -1,15 +1,36 @@
-# Profile for the step-8 measurement.
+# The measurement is a batch job, not a service. Port 0 means "any free port",
+# so a run cannot collide with a previous one that is still alive, or with an
+# ssh tunnel, or with the app running normally on 8080.
 #
-# Web server off so the run exits when it finishes.
-spring:
-  main:
-    web-application-type: none
+# It matters because the application is a web app: CommandLineRunner finishes,
+# the web server keeps the JVM up, and the process sits there holding 8080 until
+# something kills it. The next day's run then fails at startup - which costs no
+# quota, but wastes the window if nobody is watching.
+server:
+  port: 0
 
-logging:
-  level:
-    root: WARN
-    com.learning.onboarding.measure: INFO
-    # Shows each reviewer's latency and whether it came from cache, which is
-    # what makes the cost of a run legible rather than a surprise.
-    com.learning.onboarding.agents.ReviewerAgent: INFO
-    com.learning.onboarding.graph.ReviewGraph: INFO
+# Measurement profile.
+#
+# The Gemini free tier allows 20 model requests per day per model - the quota id
+# is GenerateRequestsPerDayPerProjectPerModel-FreeTier and the value is literally
+# 20. With MCP tools the full experiment is ~224 requests, because a tool call is
+# a SECOND request: the model pauses, the tool runs, and the result goes back in
+# a new one. Four of the five reviewers call a tool.
+#
+# So the measurement pre-resolves each reviewer's rulebook into its prompt. Same
+# SQL, same rows, same prompts - only the delivery changes, and it changes
+# identically for every configuration, so the comparison is unaffected.
+onboarding:
+  model:
+    # Off deliberately. With the rulebook already in the prompt, a tool call
+    # would fetch what the reviewer has been given and cost a second request -
+    # the exact cost the pre-resolution exists to avoid.
+    tools-enabled: false
+
+measure:
+  prefetch-rules: true
+  # Five defective fixtures covering all five review areas, plus two clean packs
+  # across two delivery models. F12 is drop-ship, where no ASN is required - the
+  # case a reviewer applying general retail knowledge flags wrongly, and
+  # therefore where the verifier has something to disprove.
+  fixtures: F01,F03,F06,F08,F10,F02,F12

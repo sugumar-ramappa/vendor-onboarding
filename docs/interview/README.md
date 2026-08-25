@@ -1,12 +1,14 @@
 # Interview reference
 
-Three documents, in the order you would walk someone through the project.
+Five documents. **Start with the demo script** - it is the ten minutes you would actually perform.
 
 | # | Document | Answers |
 |---|---|---|
+| 0 | [**demo-script.md**](demo-script.md) | *"Show me."* Ten minutes in order, with the sentences to say. Only one step costs quota |
 | 1 | [**architecture-flow.md**](architecture-flow.md) | *"Walk me through it."* Diagrams, the stack, and why multi-agent is justified rather than decorative |
 | 2 | [**code-walkthrough.md**](code-walkthrough.md) | *"Show me the code."* Every class, in data-flow order, with the decision inside each |
-| 3 | [**testing.md**](testing.md) | *"How do you know it works?"* 121 tests, 14 fixtures, and what is honestly still unmeasured |
+| 3 | [**worked-example.md**](worked-example.md) | *"Show me one going through."* One real fixture end to end: the documents, each reviewer's checks, every SQL query and model call |
+| 4 | [**testing.md**](testing.md) | *"How do you know it works?"* 150 tests, 14 fixtures, and what is honestly still unmeasured |
 
 Also worth having open:
 
@@ -29,7 +31,7 @@ Also worth having open:
 > every serious finding before a human sees it.
 >
 > Spring Boot 4, Spring AI, LangGraph4j, MCP tools over a read-only Postgres
-> role. 121 tests, no API key needed. 14 hand-written fixtures with planted
+> role. 150 tests, no API key needed. 14 hand-written fixtures with planted
 > defects, measured across three configurations.
 
 ---
@@ -53,9 +55,19 @@ first colours every later judgement. Prevented twice — by the type having nowh
 to store another reviewer's findings, and by the database role that cannot read
 `review_finding`.
 
-And the honest caveat: *the fan-out alone would not justify a graph library.
-`CompletableFuture.allOf` does that in ten lines. What justifies it is the
-verifier's cycle and checkpointing so a review can pause for a human and resume.*
+**Say the honest caveat before you are asked.** *The fan-out alone would not
+justify a graph library — `CompletableFuture.allOf` does that in ten lines.*
+Three other things in the flow are not ten lines:
+
+| Feature | Graph primitive | Business reason |
+|---|---|---|
+| Incomplete pack skips the four reviewers | conditional edge | chasing documents one at a time turns two weeks into eight |
+| Verifier sends a finding round again | **cycle**, bounded at 2 | resolves findings that would otherwise cost a person's time |
+| Blocking review pauses for days, then resumes | **checkpointing** | the alternative is holding a request open or throwing the review away |
+
+The third is the one that would genuinely hurt to hand-roll — it means
+serialising in-flight state — and it is why every domain record implements
+`Serializable`.
 
 ---
 
@@ -93,15 +105,34 @@ architecture diagram would have been wrong in a way nobody could see.
 
 ## What is not finished, and say so first
 
-The measurement has not run. The free-tier daily quota was exhausted during
-development, so the three configurations have not been compared and there are no
-headline numbers yet.
+**The measurement has not run, and that was a decision.**
 
-The harness, the fixtures and the matcher are built and tested. The run is
-~115 model calls and one day's quota.
+The Gemini free tier allows **20 model requests per day per model** - the quota
+id is `GenerateRequestsPerDayPerProjectPerModel-FreeTier` and the value is
+literally 20. The full experiment is around 224 requests, because a tool call is
+a second request: the model pauses, the tool runs locally, and the result goes
+back in a new request. Four of the five reviewers call a tool.
 
-**Volunteering that is a better position than being asked.** And the reason it
-ran out is itself the demonstration: every rate-limited reviewer was recorded as
-a *failure*, the application was marked `INCOMPLETE`, and nothing was
-auto-decided. A system that returned "no findings, all clear" would have approved
-a vendor nobody reviewed.
+That is eleven days of 20-request slices to produce a recall figure over 14
+fixtures. Cutting to six fixtures still takes four days and produces a number
+with an error bar wider than any difference it would be measuring.
+
+The harness, the 14 fixtures with planted defects, the matcher and the resumable
+runner are all built and tested. It runs whenever quota allows, or in an hour on
+any provider with a larger free tier - `ReviewModel` is an interface and the
+model is a configuration value.
+
+**The constraint did shape the design, which is the part worth saying.** The
+cache is content-keyed on `(area, prompt version, model, prompt)` and lives in
+Postgres, so the run resumes across days without re-paying for anything. That
+was a cost decision before it was an availability one.
+
+**And the quota running out is how I know fail-closed works.** Three times, on
+real infrastructure, every rate-limited reviewer was recorded as a *failure*
+rather than an empty result. The application came back `ESCALATED_INCOMPLETE`
+with zero findings - because zero findings from a reviewer that never ran is not
+a clean review.
+
+A system that returned "no findings, all clear" would have approved a vendor
+nobody looked at. That is not a design being described; it is one that held under
+a failure nobody planned.

@@ -2,6 +2,17 @@ spring:
   application:
     name: vendor-onboarding
 
+  servlet:
+    multipart:
+      # The first bound a vendor's upload meets, and the only one that stops
+      # bytes before they are in memory. onboarding.intake.max-file-bytes checks
+      # the same 20 MB again inside TextExtractor - by then the file has already
+      # been read, so it protects the extractors, not the heap.
+      max-file-size: 20MB
+      # A pack is nine or ten documents. This is the whole request, so it also
+      # caps how many a single submission can carry.
+      max-request-size: 120MB
+
   config:
     # Spring does NOT read .env files the way python-dotenv does. This import
     # treats .env as a properties file, which gives the same ergonomics as the
@@ -75,6 +86,11 @@ onboarding:
   policy:
     # A finding at or above this severity blocks onboarding outright.
     blocking-severity: BLOCKING
+    # A finding at or above this goes to a person even when it does not block.
+    # MAJOR is documented as "needs resolution before onboarding, but a human
+    # may waive it" - and waiving requires being shown it. Set equal to
+    # blocking-severity to go back to auto-clearing everything below BLOCKING.
+    escalation-severity: MAJOR
     # Certificates must remain valid at least this long past the application.
     min-certificate-validity-days: 30
     # Public liability cover required, in GBP.

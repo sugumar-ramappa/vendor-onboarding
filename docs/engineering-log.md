@@ -151,6 +151,82 @@ equal to one already present.
 **Why it matters:** two reviewers raising the same finding, or a node running
 twice because the verifier sent work back round the cycle, would vanish.
 
+## A node before a parallel fan-out had its findings counted twice
+
+**Symptom:** gate plus four reviewers, one finding each — and
+`findings().size()` returned 6.
+
+**Cause:** not re-execution. A print inside the gate showed it ran exactly once.
+When LangGraph4j merges the parallel branches it re-applies the updates recorded
+*before* the fork. Against a replace channel that is a no-op; against an
+appender every pre-fork value lands twice.
+
+**Fix:** the gate writes to `GATE_FINDINGS` / `GATE_AUDIT` / `GATE_FAILURES` /
+`GATE_TRACE`, deliberately absent from `SCHEMA` so they replace.
+`ReviewState.findings()` joins the two halves, so no caller knows.
+
+**Why it matters:** nothing threw, and both copies were identical and
+individually valid. The gate's finding was simply counted twice — enough to shift
+every precision number in the measurement with no visible symptom. The rule it
+produced covers checkpoint replay too: *a node's channel must be idempotent under
+re-application unless the node sits where re-application cannot happen.*
+
+**The test:** in a run with no cycle, no node may appear twice in the trace.
+
+## `@ConfigurationProperties` without `@ConfigurationPropertiesScan`
+
+**Symptom:** `required a bean of type 'PolicyProperties' that could not be found`.
+
+**Cause:** `@SpringBootApplication` does not imply
+`@ConfigurationPropertiesScan`. The record was annotated, validated, documented —
+and never registered.
+
+**Fix:** `@ConfigurationPropertiesScan` on the application class.
+
+**Why it matters:** it fails at startup rather than compile time, so it surfaced
+only when a test loaded the full context. The whole point of typed properties is
+failing early with a readable message; this failure mode is one step later than
+it looks.
+
+## Resuming with an empty map re-ran the entire review
+
+**Symptom:** `resume()` never reached the node it had paused before.
+
+**Cause:** `invoke(Map.of(), config)` is not "continue" — an argument map is read
+as the input to a *new* run, so the graph started again at the gate.
+
+**Fix:** `invoke(GraphInput.resume(), config)`.
+
+**Why it matters:** the failure is silent and expensive. A resume that
+re-executes four reviewers still produces a correct-looking answer, just slowly
+and at double the cost — the exact thing checkpointing exists to avoid. The test
+asserts the stub model's call count is unchanged across the resume, which is the
+only way to see it.
+
+## The verifier could never return UNRESOLVED
+
+**Symptom:** none. The cycle worked in tests and would never have fired in
+production.
+
+**Cause:** the prompt told the model to return UNRESOLVED, but the record it
+binds to had no field for it:
+
+```java
+record Challenge(boolean disproved, String reason, List<Evidence> evidence) {}
+```
+
+Two outcomes in the binding, three in the domain. The missing one silently
+became `survives`.
+
+**Fix:** `unresolved`, `needsEvidenceFor` and `needs` added to `Challenge`, and
+a `verifier-v2` prompt that describes them.
+
+**Why it matters:** the stub in the tests returned UNRESOLVED happily, so every
+cycle test passed against a path the real model could not reach. **A stub that
+is more capable than the thing it stands in for tests nothing.** Found by reading
+the binding record while adding something unrelated, not by a failing test - and
+that is the uncomfortable part.
+
 ## Three constructors made a bean unconstructable
 
 **Symptom:** `No default constructor found`.

@@ -63,9 +63,14 @@ public class SpringAiReviewModel implements ReviewModel {
             ToolCallback[] referenceDataCallbacks,
             @Value("${spring.ai.google.genai.chat.options.model}") String modelName,
             @Value("${onboarding.model.max-attempts:3}") int maxAttempts,
-            @Value("${onboarding.model.first-backoff-ms:35000}") long firstBackoffMs) {
+            @Value("${onboarding.model.first-backoff-ms:35000}") long firstBackoffMs,
+            @Value("${onboarding.model.tools-enabled:true}") boolean toolsEnabled) {
         this.chat = builder.build();
-        this.tools = referenceDataCallbacks;
+        // Off only for the measurement, where the rulebook is pre-resolved into
+        // the prompt. Leaving tools available alongside it would let the model
+        // fetch what it already has - and every tool call is a second API
+        // request, which is the cost the pre-resolution exists to avoid.
+        this.tools = toolsEnabled ? referenceDataCallbacks : new ToolCallback[0];
         this.modelName = modelName;
         this.maxAttempts = maxAttempts;
         this.firstBackoffMs = firstBackoffMs;
@@ -80,7 +85,7 @@ public class SpringAiReviewModel implements ReviewModel {
                 ReviewOutput output = chat.prompt()
                         .system(systemPrompt)
                         .user(userPrompt)
-                        .toolCallbacks(tools)
+                        .toolCallbacks(tools)     // empty array when disabled
                         .call()
                         .entity(ReviewOutput.class);
 
@@ -96,8 +101,13 @@ public class SpringAiReviewModel implements ReviewModel {
                 // the per-minute window has to roll over, and waiting less than
                 // that is a guaranteed second failure.
                 long wait = firstBackoffMs * attempt;
+                // describe(), not getMessage(). The retry DECISION is made on
+                // the whole cause chain, so logging only the outer message
+                // shows a line that cannot explain the behaviour beside it -
+                // "Failed to generate content" tells you nothing about why
+                // waiting 35 seconds was thought to help.
                 log.warn("model call failed (attempt {}/{}), waiting {}ms: {}",
-                        attempt, maxAttempts, wait, e.getMessage());
+                        attempt, maxAttempts, wait, describe(e).trim());
                 try {
                     Thread.sleep(wait);
                 } catch (InterruptedException interrupted) {
@@ -110,12 +120,14 @@ public class SpringAiReviewModel implements ReviewModel {
         // Never degrade to an empty list. An empty list means the reviewer
         // looked and found nothing; this means nobody looked, and the caller
         // has to escalate rather than record a clean review.
-        // The original message carries the quota id, which is what
-        // distinguishes a per-minute limit from a daily one. Losing it here
-        // would make every failure look identical in the audit trail.
+        // describe(), for the same reason as above and one more: the quota id
+        // that distinguishes a per-minute limit from a daily one lives in a
+        // NESTED cause. getMessage() here returned the wrapper's text, so every
+        // failure looked identical in the audit trail - which is the opposite
+        // of what this class exists to provide.
         throw new ReviewModelException(
                 "model could not complete the review: "
-                        + (last == null ? "unknown" : last.getMessage()), last);
+                        + (last == null ? "unknown" : describe(last).trim()), last);
     }
 
     /**

@@ -82,7 +82,23 @@ public record ReviewContext(
         if (facts.isEmpty()) {
             sb.append("  none\n");
         } else {
-            facts.forEach((documentId, f) -> {
+            // Iterate the DOCUMENT LIST, not the facts map.
+            //
+            // facts is a Map, and iterating it put this section in a different
+            // order on different JVM runs. The content was identical; only the
+            // order moved. That is invisible to a reader and fatal to a cache
+            // keyed on the rendered prompt - every run produced a new key, so
+            // nothing was ever reused and each day re-paid for the previous
+            // day's work against a 20-request quota.
+            //
+            // documents is a List, so this is stable by construction and no
+            // longer depends on which Map implementation a caller happened to
+            // build.
+            documents.stream()
+                    .map(SubmittedDocument::documentId)
+                    .filter(facts::containsKey)
+                    .forEach(documentId -> {
+                DocumentFacts f = facts.get(documentId);
                 sb.append("  ").append(documentId).append(":\n");
                 f.expiry().ifPresent(e -> sb
                         .append("    expiry: ").append(e.value())

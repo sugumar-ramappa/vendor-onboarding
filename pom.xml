@@ -180,6 +180,18 @@
     </dependency>
 
     <!--
+      Boot 4 moved @WebMvcTest and MockMvc out of spring-boot-test-autoconfigure
+      into their own module, the same split that caught us with Flyway. The
+      symptom is identical and just as unhelpful: the annotation simply does not
+      resolve, with nothing to suggest which artifact is missing.
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-webmvc-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!--
       Testcontainers, not H2. The SQL that ships is the SQL that gets tested -
       H2 accepts syntax Postgres rejects, and every serious bug in the previous
       project in this workspace was in the SQL or the type adaptation, which an

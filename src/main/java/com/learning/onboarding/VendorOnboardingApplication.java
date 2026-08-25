@@ -2,8 +2,16 @@ package com.learning.onboarding;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
+/**
+ * {@code @ConfigurationPropertiesScan} is not implied by
+ * {@code @SpringBootApplication}. Without it a {@code @ConfigurationProperties}
+ * record is annotated, validated, documented - and never registered, so the
+ * first bean to ask for it fails at startup rather than at compile time.
+ */
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class VendorOnboardingApplication {
 
     public static void main(String[] args) {

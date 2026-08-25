@@ -125,7 +125,7 @@ class DomainInvariantsTest {
         @DisplayName("a verdict must explain itself")
         void verdictNeedsReasoning() {
             assertThrows(IllegalArgumentException.class, () ->
-                    new Verdict(true, "", List.of()));
+                    new Verdict(Verdict.Outcome.DISPROVED, "", List.of(), null, List.of()));
         }
     }
 
@@ -134,7 +134,7 @@ class DomainInvariantsTest {
     class DecisionGate {
 
         private final PolicyProperties policy =
-                new PolicyProperties(Severity.BLOCKING, 30, 5_000_000L);
+                new PolicyProperties(Severity.BLOCKING, Severity.MAJOR, 30, 5_000_000L);
 
         @Test
         @DisplayName("only BLOCKING blocks, under the configured threshold")
@@ -148,9 +148,33 @@ class DomainInvariantsTest {
         @Test
         @DisplayName("lowering the threshold in config changes what blocks")
         void thresholdIsConfiguration() {
-            var strict = new PolicyProperties(Severity.MAJOR, 30, 5_000_000L);
+            var strict = new PolicyProperties(Severity.MAJOR, Severity.MAJOR, 30, 5_000_000L);
             assertTrue(strict.blocks(Severity.MAJOR),
                     "policy comes from configuration, never from a prompt");
+        }
+
+        @Test
+        @DisplayName("escalation is a separate threshold from blocking")
+        void escalationIsItsOwnThreshold() {
+            // The gap between the two thresholds is the band a human decides
+            // about rather than a threshold deciding for them.
+            assertFalse(policy.blocks(Severity.MAJOR), "MAJOR does not stop onboarding");
+            assertTrue(policy.escalates(Severity.MAJOR), "but a person must still see it");
+
+            assertFalse(policy.escalates(Severity.MINOR));
+            assertTrue(policy.escalates(Severity.BLOCKING),
+                    "anything that blocks must also reach a human");
+            assertFalse(policy.escalates(null));
+        }
+
+        @Test
+        @DisplayName("escalation above blocking is refused at startup")
+        void escalationCannotExceedBlocking() {
+            // Would configure a system where a finding stops onboarding without
+            // anyone being shown it. Nobody means to set that.
+            var e = assertThrows(IllegalArgumentException.class, () ->
+                    new PolicyProperties(Severity.MAJOR, Severity.BLOCKING, 30, 5_000_000L));
+            assertTrue(e.getMessage().contains("at or below"), e.getMessage());
         }
 
         @Test

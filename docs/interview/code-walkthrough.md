@@ -274,6 +274,11 @@ from "looked and found nothing".
 
 ## `ReviewGraph`
 
+Five node groups, and three of them are the reason a graph library is here at
+all: `completeness` (conditional edge), `verify ⟲ gatherMore` (cycle), and the
+checkpointed pause before `humanReview`. The fan-out is *not* one of the three —
+that is `CompletableFuture.allOf` in ten lines and it is better to say so first.
+
 ```java
 // NOT node_async(): that wraps a SYNCHRONOUS function and computes it
 // eagerly on the calling thread.
@@ -284,6 +289,91 @@ AsyncNodeAction<ReviewState> action = state ->
 Virtual threads (a reviewer is ~100% network wait), bounded by a semaphore at 2 —
 five concurrent calls into a free tier rate-limits, and **a rate-limited reviewer
 is a reviewer that did not run**.
+
+### `preFork()` — the gate is an ordinary reviewer that sits earlier
+
+```java
+builder.addNode("completeness", async(state -> preFork(runReviewer(gate, state))));
+```
+
+`runReviewer` is literally the same code for the gate and the four. Only the
+*channels* differ, and only because of where the node sits: LangGraph4j
+re-applies pre-fork updates when it merges the parallel branches, so an appender
+written before the fan-out doubles every value. `preFork` rewrites the keys onto
+replace channels, where re-application is a no-op.
+
+Written as a translation rather than a second copy of `runReviewer`, so the two
+cannot drift.
+
+### The cycle, and why the bound is not just tidiness
+
+```java
+builder.addConditionalEdges("verify",
+        edge_async(state -> state.hasUnresolvedFindings()
+                && state.verifyPasses() < MAX_VERIFY_PASSES ? "again" : "done"),
+        Map.of("again", "gatherMore", "done", "decide"));
+
+builder.addEdge("gatherMore", "verify");   // the cycle
+```
+
+`MAX_VERIFY_PASSES = 2`. The loop continues while a *model* says it needs more
+evidence — which is precisely the control a crafted document would try to seize.
+The bound is in Java, the counter is in state, and `recursionLimit(40)` catches a
+broken counter.
+
+### `EvidenceGatherer` — what makes the cycle worth having
+
+```java
+String gathered = gatherer.gather(state.unresolvedQuestions(), state.context());
+```
+
+`ReferenceDataGatherer` runs **one query per `EvidenceNeed` the verifier named**,
+over the agents' read-only connection.
+
+```java
+for (EvidenceNeed need : needs.stream().distinct().toList()) {
+    switch (need) {
+        case COMPLIANCE_RULES -> ... reference.complianceRules(category)
+        case REQUIRED_DOCUMENTS -> ... reference.requiredDocuments(category, delivery)
+        ...
+    }
+}
+```
+
+**No model call, and no parsing.** *Which* data comes from the enum — a closed
+set that either binds or fails. *Which rows* come from the application's own
+category and delivery model. Neither is derived from free text, so a vendor
+cannot steer the lookup by writing something suggestive in a PDF.
+
+`EvidenceNeed.menu()` generates the list the model chooses from, so a new value
+cannot be added without the model being told it exists. A test asserts every enum
+constant appears in the menu — otherwise its `switch` branch is dead code.
+
+Returning empty is meaningful. It tells the graph another pass cannot help, so
+the loop exits and the unresolved findings go to a human — exactly what would
+have happened without the cycle. `EvidenceGatherer.NONE` is the no-database case
+used by the measurement harness.
+
+`reverifyUnresolved()` handles the second pass and touches only findings whose
+verdict is `UNRESOLVED`. A verdict settled on pass 1 did not become less true
+because a different finding needed a lookup.
+
+**What happens when it gives up matters more than the bound.** An unresolved
+finding is not a disproved one, so it survives and the application goes to a
+human. `Verdict` has three outcomes for exactly this reason — collapsing
+UNRESOLVED into DISPROVED would drop real findings whenever the verifier was
+merely unsure.
+
+### The pause
+
+```java
+.interruptBefore(HUMAN_REVIEW_NODE)
+```
+
+Before, not after: the run stops with the state a person needs to see, rather
+than finishing and recording a decision nobody made. Resuming is
+`graph.invoke(GraphInput.resume(), config)` — an empty argument map instead
+starts a fresh run and silently re-pays for every reviewer.
 
 ## `GroundingCheck`
 
@@ -306,6 +396,37 @@ same problem slightly differently. Same-area findings are never a conflict.
 
 **Half the tests assert something is NOT a conflict.** Noise is what gets a
 review tool switched off.
+
+---
+
+# web — the front door
+
+## `ApplicationController`
+
+`POST /applications`, multipart: one JSON part declaring the pack, N file parts,
+an optional `.xlsx`. Thin by design — it turns parts into bytes, calls
+`IntakeService`, and maps typed failures to status codes.
+
+**201 on a fresh review, 200 when the pack was already reviewed.** Nothing was
+created and no model call was made, and a caller retrying after a timeout needs
+to tell those apart.
+
+**`IntakeException` becomes 400, not 500.** An encrypted PDF is the vendor's to
+fix; failing to reach the model is ours. Returning 500 for the first sends
+someone to read our logs about a problem in someone else's file.
+
+**Synchronous, and that is a real limitation.** A review is ~2 minutes, which is
+a long time to hold a connection. The production shape is 202 plus polling — the
+graph already checkpoints, so the work outliving the request is not the hard
+part. Better to say that than to pretend the trade-off was not made.
+
+## `IntakeService`
+
+Separate from the controller because this is the part worth testing and it has
+nothing to do with HTTP. It reconciles declarations against uploads **in both
+directions** — see the class comment for why an undeclared file is an error
+rather than something to ignore — extracts text, records `ExtractionSource` per
+document, and runs `FactExtractor` before any model is involved.
 
 ---
 

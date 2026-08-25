@@ -1,6 +1,7 @@
 package com.learning.onboarding.agents;
 
 import com.learning.onboarding.domain.Evidence;
+import com.learning.onboarding.domain.EvidenceNeed;
 import com.learning.onboarding.domain.ReviewFinding;
 import com.learning.onboarding.domain.Severity;
 import com.learning.onboarding.domain.Verdict;
@@ -73,7 +74,22 @@ public class VerifierAgent {
      * @return the verdict, or a surviving verdict if the challenge could not run
      */
     public Verdict challenge(ReviewFinding finding, ReviewContext context) {
-        String system = prompts.get(promptVersion);
+        return challenge(finding, context, "");
+    }
+
+    /**
+     * @param evidence reference data fetched because a previous pass asked for
+     *                 it, or empty on the first pass. Placed ABOVE the vendor's
+     *                 documents deliberately: it is ours and authoritative, and
+     *                 the untrusted material stays last.
+     */
+    public Verdict challenge(ReviewFinding finding, ReviewContext context, String evidence) {
+        // The menu is generated from the enum rather than written into the
+        // prompt file, so a new EvidenceNeed cannot be added without the model
+        // being told it exists - a mismatch that would show up as the model
+        // never once picking the new value.
+        String system = prompts.get(promptVersion)
+                .replace("REFERENCE_DATA_MENU", EvidenceNeed.menu());
         String user = """
                 THE FINDING YOU ARE CHALLENGING
 
@@ -84,6 +100,7 @@ public class VerifierAgent {
                   evidence:
                 %s
 
+                %s
                 THE APPLICATION AND ITS DOCUMENTS
 
                 %s
@@ -94,6 +111,7 @@ public class VerifierAgent {
                 finding.details().isSkuSpecific()
                         ? "SKU:       " + finding.details().skuRef() : "",
                 renderEvidence(finding.evidence()),
+                evidence == null || evidence.isBlank() ? "" : evidence + "\n",
                 context.render());
 
         try {

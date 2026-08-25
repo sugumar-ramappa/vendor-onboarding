@@ -1,10 +1,14 @@
 package com.learning.onboarding.agents;
 
 import com.learning.onboarding.domain.ReviewArea;
+import com.learning.onboarding.config.PolicyProperties;
 import com.learning.onboarding.graph.ConflictDetector;
+import com.learning.onboarding.graph.EvidenceGatherer;
 import com.learning.onboarding.graph.GroundingCheck;
 import com.learning.onboarding.graph.ReviewGraph;
 import org.bsc.langgraph4j.GraphStateException;
+import org.bsc.langgraph4j.checkpoint.BaseCheckpointSaver;
+import org.bsc.langgraph4j.checkpoint.MemorySaver;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -73,7 +77,7 @@ public class ReviewerAgentsConfig {
     @Bean
     public VerifierAgent verifierAgent(PromptLibrary prompts,
                                        VerifierAgent.VerifierModel model) {
-        return new VerifierAgent("verifier-v1", prompts, model);
+        return new VerifierAgent("verifier-v2", prompts, model);
     }
 
     /**
@@ -86,9 +90,37 @@ public class ReviewerAgentsConfig {
             ConflictDetector conflictDetector,
             GroundingCheck groundingCheck,
             VerifierAgent verifier,
+            EvidenceGatherer gatherer,
+            PolicyProperties policy,
+            BaseCheckpointSaver checkpointSaver,
             @Value("${onboarding.model.concurrency:2}") int concurrency)
             throws GraphStateException {
-        return new ReviewGraph(reviewers, concurrency, conflictDetector,
-                groundingCheck, verifier);
+
+        // Completeness is a GATE, not a peer. It runs first and alone, and the
+        // other four only run if it passes - which is what makes an incomplete
+        // pack cost one model call instead of five.
+        ReviewerAgent completeness = reviewers.stream()
+                .filter(r -> r.area() == ReviewArea.COMPLETENESS)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("no completeness reviewer"));
+
+        List<ReviewerAgent> substantive = reviewers.stream()
+                .filter(r -> r.area() != ReviewArea.COMPLETENESS)
+                .toList();
+
+        return new ReviewGraph(completeness, substantive, concurrency, conflictDetector,
+                groundingCheck, verifier, gatherer, policy, checkpointSaver);
+    }
+
+    /**
+     * Where a paused review is stored while it waits for a person.
+     *
+     * <p>In memory for now. Swapping in {@code langgraph4j-postgres-saver} makes
+     * a pause survive a restart, which is what a decision taking days actually
+     * requires - the interface is the same either way.
+     */
+    @Bean
+    public BaseCheckpointSaver checkpointSaver() {
+        return new MemorySaver();
     }
 }

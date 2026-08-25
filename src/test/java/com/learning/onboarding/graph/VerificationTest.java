@@ -2,6 +2,7 @@ package com.learning.onboarding.graph;
 
 import com.learning.onboarding.agents.*;
 import com.learning.onboarding.domain.*;
+import com.learning.onboarding.config.PolicyProperties;
 import com.learning.onboarding.intake.ExtractionSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -222,6 +223,29 @@ class VerificationTest {
 
     // ------------------------------------------------ the graph, end to end --
 
+    /** A gate that always passes, so every fixture reaches the reviewers. */
+    private ReviewerAgent passingGate() {
+        return new ReviewerAgent(ReviewArea.COMPLETENESS, "completeness-v2", prompts,
+                new ReviewModel() {
+                    @Override
+                    public List<AgentFinding> review(String system, String user) {
+                        return List.of();
+                    }
+
+                    @Override
+                    public String modelName() {
+                        return "stub";
+                    }
+                });
+    }
+
+    /** Gate that always passes, one reviewer, optional verifier, no checkpointing. */
+    private ReviewGraph graph(ReviewModel model, VerifierAgent verifier) throws Exception {
+        return new ReviewGraph(passingGate(), reviewers(prompts, model), 2,
+                new ConflictDetector(), grounding, verifier, EvidenceGatherer.NONE,
+                new PolicyProperties(Severity.BLOCKING, Severity.MAJOR, 30, 5_000_000L), null);
+    }
+
     private static List<ReviewerAgent> reviewers(PromptLibrary prompts, ReviewModel model) {
         return List.of(new ReviewerAgent(ReviewArea.COMPLIANCE, "compliance-v2",
                 prompts, model));
@@ -248,10 +272,7 @@ class VerificationTest {
                 List.of(new Evidence("cert.pdf", 1, "Scope: all power tools")),
                 CheckType.SEMANTIC, 0.95, null);
 
-        var graph = new ReviewGraph(
-                reviewers(prompts, modelReturning(fabricated)), 2,
-                new ConflictDetector(), grounding,
-                verifier(verdictOf(Verdict.survives("stands"))));
+        var graph = graph(modelReturning(fabricated), verifier(verdictOf(Verdict.survives("stands"))));
 
         ReviewState result = graph.review(context(ExtractionSource.NATIVE_TEXT));
 
@@ -271,9 +292,7 @@ class VerificationTest {
                         "Hand tools and non-powered garden implements")),
                 CheckType.SEMANTIC, 0.95, "ACM-DRL-18V");
 
-        var graph = new ReviewGraph(
-                reviewers(prompts, modelReturning(genuine)), 2,
-                new ConflictDetector(), grounding,
+        var graph = graph(modelReturning(genuine),
                 verifier(verdictOf(Verdict.survives("could not refute this"))));
 
         assertEquals(1, graph.review(context(ExtractionSource.NATIVE_TEXT))
@@ -301,9 +320,7 @@ class VerificationTest {
                 List.of(new Evidence("cert.pdf", 1, "Tested to: EN 62841")),
                 CheckType.SEMANTIC, 0.6, null);
 
-        var graph = new ReviewGraph(
-                reviewers(prompts, modelReturning(minor)), 2,
-                new ConflictDetector(), grounding, verifier(counting));
+        var graph = graph(modelReturning(minor), verifier(counting));
 
         ReviewState result = graph.review(context(ExtractionSource.NATIVE_TEXT));
 

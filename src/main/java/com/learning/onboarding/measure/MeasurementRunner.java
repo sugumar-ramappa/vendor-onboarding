@@ -1,16 +1,26 @@
 package com.learning.onboarding.measure;
 
 import com.learning.onboarding.agents.*;
+import com.learning.onboarding.config.PolicyProperties;
+import com.learning.onboarding.domain.EvidenceNeed;
 import com.learning.onboarding.domain.ReviewArea;
 import com.learning.onboarding.graph.ConflictDetector;
+import com.learning.onboarding.graph.EvidenceGatherer;
 import com.learning.onboarding.graph.GroundingCheck;
 import com.learning.onboarding.graph.ReviewGraph;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Runs the measurement.
@@ -46,6 +56,8 @@ import java.util.List;
 @Profile("measure")
 public class MeasurementRunner implements CommandLineRunner {
 
+    private static final Logger log = LoggerFactory.getLogger(MeasurementRunner.class);
+
     private final FixtureLoader loader;
     private final PromptLibrary prompts;
     private final ReviewModel reviewModel;
@@ -53,11 +65,16 @@ public class MeasurementRunner implements CommandLineRunner {
     private final VerifierAgent verifier;
     private final GroundingCheck grounding;
     private final ConflictDetector conflicts;
+    private final PolicyProperties policy;
+    private final EvidenceGatherer gatherer;
 
     public MeasurementRunner(FixtureLoader loader, PromptLibrary prompts,
                              ReviewModel reviewModel, ReviewCache cache,
                              VerifierAgent verifier, GroundingCheck grounding,
-                             ConflictDetector conflicts) {
+                             ConflictDetector conflicts, PolicyProperties policy,
+                             EvidenceGatherer gatherer) {
+        this.policy = policy;
+        this.gatherer = gatherer;
         this.loader = loader;
         this.prompts = prompts;
         this.reviewModel = reviewModel;
@@ -67,35 +84,154 @@ public class MeasurementRunner implements CommandLineRunner {
         this.conflicts = conflicts;
     }
 
+    /**
+     * Which configurations to run, from {@code -Dmeasure.configs=1,2}.
+     *
+     * <p>Defaults to all three.
+     */
+    @Value("${measure.configs:1,2,3}")
+    private String configsToRun;
+
+    /**
+     * Which fixtures to run, from {@code -Dmeasure.fixtures=F01,F03,F02}.
+     *
+     * <p>Empty means all of them. Exists because the free tier allows 20 model
+     * requests per day and the full experiment is around 224, so the realistic
+     * choice is not "when do I run this" but "which subset can I afford".
+     *
+     * <p>Choose a subset that keeps every review area represented and keeps the
+     * clean fixtures. Dropping a clean fixture removes the only place false
+     * positives are counted at all, which is the number the verifier exists to
+     * move.
+     */
+    @Value("${measure.fixtures:F01,F03,F06,F08,F10,F02,F12}")
+    private String fixturesToRun;
+
+    /**
+     * Pre-resolve each reviewer's rulebook into its prompt instead of exposing
+     * MCP tools.
+     *
+     * <p>Halves the experiment. A tool call is a SECOND API request - the model
+     * pauses, the tool runs locally, and the result goes back in a new request -
+     * and four of the five reviewers call one. The free tier allows 20 requests
+     * a day, so this is the difference between three days and six.
+     *
+     * <p>Same SQL, same rows, same reviewer prompts. What changes is only how
+     * the data arrives. Both configurations get it identically, so the
+     * comparison - does specialisation help? - is unaffected, and it removes
+     * tool-calling reliability as a confound in an experiment that is not about
+     * function calling.
+     *
+     * <p>Set {@code onboarding.model.tools-enabled=false} alongside it, or the
+     * model may fetch what it has already been given.
+     */
+    @Value("${measure.prefetch-rules:true}")
+    private boolean prefetchRules;
+
+    /**
+     * Writes each configuration to measurements/ as it finishes.
+     *
+     * <p>The cache protects quota; this protects the result. Two days of
+     * measurement were lost when the Postgres container was removed, because
+     * the only record of the experiment was inside it.
+     */
+    private final ResultStore store = new ResultStore();
+
     @Override
     public void run(String... args) throws Exception {
         List<Fixture> fixtures = loader.loadAll();
+
+        if (!fixturesToRun.isBlank()) {
+            Set<String> wanted = Arrays.stream(fixturesToRun.split(","))
+                    .map(String::trim).filter(t -> !t.isEmpty())
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+
+            List<Fixture> chosen = fixtures.stream()
+                    .filter(f -> wanted.contains(f.id())).toList();
+
+            // A typo in a fixture id would otherwise silently shrink the
+            // experiment, and a recall figure over four fixtures looks exactly
+            // like a recall figure over fourteen.
+            if (chosen.size() != wanted.size()) {
+                Set<String> found = chosen.stream().map(Fixture::id)
+                        .collect(Collectors.toCollection(LinkedHashSet::new));
+                throw new IllegalArgumentException("unknown fixture id(s): "
+                        + wanted.stream().filter(w -> !found.contains(w)).toList());
+            }
+            fixtures = chosen;
+        }
+        final List<Fixture> selectedFixtures = fixtures;
+
         var harness = new MeasurementHarness(loader);
         var results = new ArrayList<MeasurementHarness.Result>();
+        var completed = new LinkedHashSet<Integer>();
 
-        System.out.printf("%n=== measurement: %d fixtures, %d planted defects, %d clean ===%n%n",
-                fixtures.size(),
-                fixtures.stream().mapToInt(f -> f.expected().size()).sum(),
-                fixtures.stream().filter(Fixture::clean).count());
+        Set<Integer> selected = Arrays.stream(configsToRun.split(","))
+                .map(String::trim).filter(t -> !t.isEmpty())
+                .map(Integer::parseInt).collect(Collectors.toCollection(LinkedHashSet::new));
+
+        System.out.printf("%n=== measurement: %d fixtures, %d planted defects, %d clean ===%n",
+                selectedFixtures.size(),
+                selectedFixtures.stream().mapToInt(f -> f.expected().size()).sum(),
+                selectedFixtures.stream().filter(Fixture::clean).count());
+        System.out.printf("=== running configuration(s) %s ===%n", selected);
+        printCostEstimate(selectedFixtures.size(), selected);
 
         // 1. One reviewer covering all five areas. The baseline the whole
         //    project exists to beat - or to fail to beat, which would be a more
         //    interesting result and worth reporting either way.
-        results.add(harness.run("single agent, all five areas",
-                graph(List.of(reviewer(ReviewArea.COMPLIANCE, "single-v1")), null),
-                fixtures));
+        //
+        //    It is its own completeness gate, so the gate always passes and
+        //    every fixture reaches it. That is the honest comparison: the
+        //    baseline is "one prompt does everything", not "one prompt behind
+        //    our routing".
+        if (selected.contains(1)) {
+            runNamed(results, completed, 1, "single agent, all five areas",
+                    () -> harness.runSingleAgent("single agent, all five areas",
+                            reviewer(ReviewArea.COMPLIANCE, "single-v1"), selectedFixtures));
+        }
 
-        // 2. Five isolated reviewers, no verification.
-        results.add(harness.run("five agents, no verifier",
-                graph(fiveReviewers(), null), fixtures));
+        // 2. Completeness gate plus four isolated reviewers, no verification.
+        if (selected.contains(2)) {
+            runNamed(results, completed, 2, "gate + four agents, no verifier",
+                    () -> harness.run("gate + four agents, no verifier",
+                            graph(completenessGate(), fourReviewers(), null), selectedFixtures));
+        }
 
-        // 3. The same five, now challenged. Their output comes from cache, so
-        //    the only new cost is the verifier itself.
-        results.add(harness.run("five agents + verifier",
-                graph(fiveReviewers(), verifier), fixtures));
+        // 3. The same, now challenged. The reviewers' output comes from cache,
+        //    so the only new cost is the verifier itself.
+        if (selected.contains(3)) {
+            runNamed(results, completed, 3, "gate + four agents + verifier",
+                    () -> harness.run("gate + four agents + verifier",
+                            graph(completenessGate(), fourReviewers(), verifier), selectedFixtures));
+        }
 
         System.out.printf("%n=== results ===%n%n");
         results.forEach(r -> System.out.println("  " + r.summary() + "\n"));
+
+        // Which ones are still owed, by number - not "the last N". A quota
+        // failure on configuration 1 with 2 and 3 succeeding is unlikely but
+        // arithmetic that only works when failures come last is arithmetic that
+        // will be wrong exactly once, silently, on the day it matters.
+        var unfinished = selected.stream().filter(c -> !completed.contains(c)).toList();
+
+        if (!unfinished.isEmpty()) {
+            System.out.printf("""
+                      %d of %d configuration(s) did not finish.
+
+                      Every model call that DID succeed is in the review_cache table,
+                      which lives in Postgres and survives this process. Re-running the
+                      unfinished configurations tomorrow re-uses all of it, so the second
+                      run costs only what the first one never reached:
+
+                        ./mvnw spring-boot:run -Dspring-boot.run.profiles=measure \\
+                          -Dspring-boot.run.jvmArguments="-Dmeasure.configs=%s"
+                    %n""", unfinished.size(), selected.size(),
+                    unfinished.stream().map(String::valueOf).collect(Collectors.joining(",")));
+        }
+
+        System.out.printf("  results written to measurements/ (configurations recorded: %s)%n%n",
+                store.recorded());
 
         System.out.println("""
                   Recall and false positives are reported together on purpose.
@@ -105,9 +241,88 @@ public class MeasurementRunner implements CommandLineRunner {
                 """);
     }
 
-    private List<ReviewerAgent> fiveReviewers() {
+    /**
+     * Runs one configuration and prints it immediately.
+     *
+     * <p>Printed as it completes, not collected and printed at the end. The
+     * daily free-tier quota is roughly the size of this experiment, so running
+     * out partway through is the expected case rather than an unlucky one - and
+     * holding the first two results until the third finishes throws away the
+     * work that did succeed.
+     *
+     * <p>The failure is caught rather than propagated for the same reason. A
+     * quota error on configuration 3 must not take configuration 2's numbers
+     * with it.
+     */
+    /**
+     * What this run will cost, before it costs it.
+     *
+     * <p>The free tier allows 20 requests per day per model. Discovering that a
+     * run needs eleven days by watching it fail on day one is an expensive way
+     * to find out, and the numbers are known in advance.
+     *
+     * <p>A tool call is a second request, not a free extra: the model pauses,
+     * the tool runs locally, and the result goes back in a new request. Four of
+     * the five reviewers call a tool.
+     */
+    private void printCostEstimate(int fixtureCount, Set<Integer> selected) {
+        // With tools, every reviewer that calls one costs a second request.
+        // With the rulebook pre-resolved, each reviewer is a single request.
+        int perFixture = prefetchRules
+                ? (selected.contains(1) ? 1 : 0)
+                        + (selected.contains(2) ? 5 : 0)
+                        + (selected.contains(3) ? 2 : 0)
+                : (selected.contains(1) ? 2 : 0)
+                        + (selected.contains(2) ? 9 : 0)
+                        + (selected.contains(3) ? 5 : 0);
+        int total = perFixture * fixtureCount;
+
+        System.out.printf("""
+                === estimated cost ===
+                  %d fixture(s) x ~%d request(s) = ~%d model request(s)   [rules %s]
+                  free tier is %d/day per model, so this needs ~%d day(s)
+                  cached calls from earlier runs do not count - the real number
+                  will be lower if you have run this configuration before
+                %n""", fixtureCount, perFixture, total,
+                prefetchRules ? "pre-resolved" : "via MCP tools", FREE_TIER_DAILY,
+                Math.max(1, (int) Math.ceil((double) total / FREE_TIER_DAILY)));
+    }
+
+    /** Observed on 2026-08-22, from the quota id in a 429 response. */
+    private static final int FREE_TIER_DAILY = 20;
+
+    private void runNamed(List<MeasurementHarness.Result> results, Set<Integer> completed,
+                          int number, String label, ResultSupplier run) {
+        System.out.printf("--- configuration %d: %s ---%n", number, label);
+        try {
+            MeasurementHarness.Result result = run.get();
+            results.add(result);
+            completed.add(number);
+            // Flushed here, not after the loop. Running out of quota partway
+            // through is the expected case, and a configuration that finished
+            // is worth keeping even if the next one dies mid-call.
+            store.save(number, result);
+            store.writeReport();
+            System.out.printf("%n  %s%n%n", result.summary());
+
+        } catch (Exception e) {
+            System.out.printf("%n  configuration %d did not finish: %s%n%n",
+                    number, e.getMessage());
+            log.warn("configuration {} failed", number, e);
+        }
+    }
+
+    @FunctionalInterface
+    private interface ResultSupplier {
+        MeasurementHarness.Result get() throws Exception;
+    }
+
+    private ReviewerAgent completenessGate() {
+        return reviewer(ReviewArea.COMPLETENESS, "completeness-v2");
+    }
+
+    private List<ReviewerAgent> fourReviewers() {
         return List.of(
-                reviewer(ReviewArea.COMPLETENESS, "completeness-v2"),
                 reviewer(ReviewArea.COMPLIANCE, "compliance-v2"),
                 reviewer(ReviewArea.QUALITY, "quality-v2"),
                 reviewer(ReviewArea.LOGISTICS, "logistics-v2"),
@@ -115,14 +330,46 @@ public class MeasurementRunner implements CommandLineRunner {
     }
 
     private ReviewerAgent reviewer(ReviewArea area, String promptVersion) {
-        return new ReviewerAgent(area, promptVersion, prompts, reviewModel, cache);
+        if (!prefetchRules) {
+            return new ReviewerAgent(area, promptVersion, prompts, reviewModel, cache);
+        }
+        List<EvidenceNeed> needs = rulebookFor(area, promptVersion);
+        return new ReviewerAgent(area, promptVersion, prompts, reviewModel, cache,
+                context -> gatherer.gather(needs, List.of(), context));
+    }
+
+    /**
+     * Which slice of the rulebook a reviewer would have fetched for itself.
+     *
+     * <p>Mirrors the tool each prompt is told to call, so pre-resolving gives
+     * the reviewer exactly what tool calling would have. QUALITY gets nothing
+     * because it has no reference tool - it reads the audit report.
+     *
+     * <p>The single-agent baseline gets everything, because one prompt covering
+     * all five areas would have called all four tools - which is what it did
+     * when this was measured with tools enabled.
+     */
+    private static List<EvidenceNeed> rulebookFor(ReviewArea area, String promptVersion) {
+        if (promptVersion.startsWith("single")) {
+            return List.of(EvidenceNeed.values());
+        }
+        return switch (area) {
+            case COMPLETENESS -> List.of(EvidenceNeed.REQUIRED_DOCUMENTS);
+            case COMPLIANCE -> List.of(EvidenceNeed.COMPLIANCE_RULES);
+            case LOGISTICS -> List.of(EvidenceNeed.LOGISTICS_REQUIREMENTS);
+            case FINANCE -> List.of(EvidenceNeed.FINANCE_THRESHOLDS);
+            case QUALITY -> List.of();
+        };
     }
 
     /**
      * @param verifier null to run without adversarial verification
      */
-    private ReviewGraph graph(List<ReviewerAgent> reviewers, VerifierAgent verifier)
-            throws Exception {
-        return new ReviewGraph(reviewers, 2, conflicts, grounding, verifier);
+    private ReviewGraph graph(ReviewerAgent gate, List<ReviewerAgent> reviewers,
+                              VerifierAgent verifier) throws Exception {
+        // No checkpoint saver: the measurement runs to completion rather than
+        // pausing for a human, and a paused fixture would just hang the run.
+        return new ReviewGraph(gate, reviewers, 2, conflicts, grounding,
+                verifier, gatherer, policy, null);
     }
 }

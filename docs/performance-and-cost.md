@@ -228,3 +228,42 @@ The general principle underneath all of it:
 
 > **An LLM call costs roughly 300,000× a regex. Most of the engineering in a
 > system like this is deciding what never needs to reach a model.**
+
+
+---
+
+## The verify cycle, and the two ways it could have cost more than it saves
+
+A cycle that re-examines findings is easy to make expensive. Two decisions keep
+it cheap enough to be worth having.
+
+**The rulebook is fetched lazily, not pasted into every prompt.** Putting the
+compliance rules for a category into all five reviewer prompts would remove the
+need for the cycle entirely — and would be paid on every review of every
+application, for a slice that only contested findings need. It also makes every
+prompt longer, which costs tokens *and* measurably dilutes attention on the
+documents the reviewer is meant to be reading.
+
+| | Cost |
+|---|---|
+| Rulebook in all 5 reviewer prompts | every review, ~5× the tokens |
+| Fetched on an unresolved verdict | a few SQL queries, only when contested |
+
+**A later pass re-challenges only what is still open.** The first version
+re-verified every finding on pass 2:
+
+```
+N serious findings, 1 unresolved
+   before:  2N model calls
+   after:   N + 1
+```
+
+With five findings that is 10 calls versus 6, for identical output. The verdicts
+settled on pass 1 did not become less true because a different finding needed a
+lookup.
+
+**And the gatherer makes no model call.** Which slice of reference data to read
+follows from the application's category and delivery model — facts we already
+hold. Letting a model route the verifier's free-text question to a tool would
+add a call per pass, a failure mode, and a place for a crafted document to steer
+a lookup.

@@ -4,15 +4,15 @@ Two independent things, and conflating them is the standard mistake:
 
 | | Question | Tool | Cost |
 |---|---|---|---|
-| **Correctness** | Does the code do what it says? | `./mvnw test` — 121 tests | free, ~30s |
+| **Correctness** | Does the code do what it says? | `./mvnw test` — 150 tests | free, ~30s |
 | **Quality** | Do the reviewers find real problems? | `MeasurementRunner` — 14 fixtures | ~115 model calls |
 
-**121 tests pass with no API key and no network.** Every model call is stubbed.
+**150 tests pass with no API key and no network.** Every model call is stubbed.
 A test suite that needs credentials is a test suite nobody runs.
 
 ---
 
-# Part 1 — The 121 tests
+# Part 1 — The 150 tests
 
 | Suite | What it defends |
 |---|---|
@@ -23,7 +23,9 @@ A test suite that needs credentials is a test suite nobody runs.
 | `SchemaMigrationTest` | Migrations against real Postgres |
 | `ReferenceDataToolsTest` | **The read-only role** |
 | `ReviewerAgentTest` | What reaches the model, what gets stamped on |
-| `ReviewGraphTest` | Parallelism, isolation, partial failure |
+| `IntakeServiceTest` | Real PDF and .xlsx bytes through the extractors to a ReviewContext |
+| `ApplicationControllerTest` | Multipart binding, 400-not-500 on a bad file, 201 vs 200 |
+| `ReviewGraphTest` | Parallelism, isolation, partial failure, and the three graph features: conditional skip, bounded cycle, checkpointed pause/resume |
 | `ConflictDetectorTest` | Disagreement — and mostly, non-disagreement |
 | `VerificationTest` | Grounding and adversarial challenge |
 | `ReviewCacheTest` | Cache keys, and the six ways they must miss |
@@ -251,7 +253,7 @@ docker run -d --name ragdb -p 5432:5432 \
   -e POSTGRES_PASSWORD=dev pgvector/pgvector:pg16
 createdb vendor_onboarding
 
-# 121 tests, no API key needed, ~30 seconds
+# 150 tests, no API key needed, ~30 seconds
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 ./mvnw test
 

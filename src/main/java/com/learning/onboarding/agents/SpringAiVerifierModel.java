@@ -1,6 +1,7 @@
 package com.learning.onboarding.agents;
 
 import com.learning.onboarding.domain.Evidence;
+import com.learning.onboarding.domain.EvidenceNeed;
 import com.learning.onboarding.domain.Verdict;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +40,9 @@ public class SpringAiVerifierModel implements VerifierAgent.VerifierModel {
      * field for a replacement claim. The verifier can refute or not. It cannot
      * rewrite another reviewer's work.
      */
-    public record Challenge(boolean disproved, String reason, List<Evidence> evidence) {}
+    public record Challenge(boolean disproved, boolean unresolved, String reason,
+                            List<Evidence> evidence, String needsEvidenceFor,
+                            List<EvidenceNeed> needs) {}
 
     private final ChatClient chat;
     private final ToolCallback[] tools;
@@ -67,6 +70,24 @@ public class SpringAiVerifierModel implements VerifierAgent.VerifierModel {
             // Nothing came back. The finding stands - see VerifierAgent for why
             // the default runs this way round in this domain.
             return Verdict.survives("no response from the verifier");
+        }
+
+        // Checked before disproved: a response claiming both is confused, and
+        // the safe reading of a confused refutation is that it did not refute.
+        if (response.unresolved()) {
+            String question = blankToDefault(response.needsEvidenceFor(), "");
+            List<EvidenceNeed> needs =
+                    response.needs() == null ? List.of() : response.needs();
+
+            if (needs.isEmpty()) {
+                // Undecided with nothing named. Honest, and not actionable -
+                // there is no lookup to run, so no pass to spend.
+                log.debug("verifier undecided without naming what it needs");
+                return Verdict.unresolved(
+                        blankToDefault(response.reason(), "could not decide"), question);
+            }
+            return Verdict.unresolved(
+                    blankToDefault(response.reason(), "could not decide"), question, needs);
         }
 
         if (!response.disproved()) {

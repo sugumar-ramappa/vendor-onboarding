@@ -62,10 +62,20 @@ public record Fixture(
             String note
     ) {
 
+        /**
+         * Was this defect DETECTED - by anyone.
+         *
+         * <p>Deliberately does not check the area. That check used to live here,
+         * and it silently capped the single-agent baseline: its findings carry
+         * whichever {@link ReviewArea} slot it was constructed with, so six of
+         * the eleven planted defects could never match however well it did. A
+         * baseline that cannot score above 0.45 by construction makes the
+         * comparison an artefact of the harness.
+         *
+         * <p>Whether the RIGHT reviewer found it is a real and separate
+         * question - see {@link #routedCorrectly}.
+         */
         public boolean matchedBy(ReviewFinding finding) {
-            if (finding.area() != area) {
-                return false;
-            }
             if (!finding.severity().atLeast(minSeverity)) {
                 return false;
             }
@@ -74,6 +84,18 @@ public record Fixture(
             }
             String text = finding.problem().toLowerCase();
             return mustMention.stream().allMatch(word -> text.contains(word.toLowerCase()));
+        }
+
+        /**
+         * Was it found by the reviewer that should have found it.
+         *
+         * <p>Only meaningful where the areas are real. A single agent covering
+         * all five has no routing to be right or wrong about, so this is
+         * reported for the multi-agent configurations and marked N/A for the
+         * baseline rather than scored as a failure.
+         */
+        public boolean routedCorrectly(ReviewFinding finding) {
+            return matchedBy(finding) && finding.area() == area;
         }
     }
 

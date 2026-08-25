@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * One reviewer: builds the prompt, calls the model, stamps the result.
@@ -46,9 +47,34 @@ public class ReviewerAgent {
     private final ReviewModel model;
     private final ReviewCache cache;
 
+    /** Empty in production - reviewers fetch their rules through MCP tools. */
+    private Function<ReviewContext, String> referenceData = context -> "";
+
     public ReviewerAgent(ReviewArea area, String promptVersion,
                          PromptLibrary prompts, ReviewModel model) {
         this(area, promptVersion, prompts, model, ReviewCache.NONE);
+    }
+
+    /**
+     * @param referenceData supplies this reviewer's slice of the rulebook, to be
+     *                      placed above the vendor's documents. Return empty to
+     *                      leave the reviewer to fetch it through MCP tools,
+     *                      which is what production does.
+     *
+     *                      <p>Exists for the measurement. A tool call is a
+     *                      SECOND API request - the model pauses, the tool runs,
+     *                      and the result goes back in a new request - so with
+     *                      four of five reviewers calling a tool, tools double
+     *                      the cost of the experiment. Pre-resolving the same
+     *                      SQL halves it, and removes tool-calling reliability
+     *                      as a confound in a comparison that is about
+     *                      specialisation, not about function calling.
+     */
+    public ReviewerAgent(ReviewArea area, String promptVersion, PromptLibrary prompts,
+                         ReviewModel model, ReviewCache cache,
+                         Function<ReviewContext, String> referenceData) {
+        this(area, promptVersion, prompts, model, cache);
+        this.referenceData = referenceData;
     }
 
     public ReviewerAgent(ReviewArea area, String promptVersion, PromptLibrary prompts,
@@ -80,7 +106,15 @@ public class ReviewerAgent {
     public ReviewOutcome review(ReviewContext context) {
         UUID callId = UUID.randomUUID();
         String systemPrompt = prompts.get(promptVersion);
-        String userPrompt = context.render();
+
+        // Rulebook first, vendor documents last. Ours is authoritative and the
+        // untrusted material must never sit above the instructions it might try
+        // to override - the same ordering ReviewContext.render() already uses
+        // internally, extended one level out.
+        String reference = referenceData.apply(context);
+        String userPrompt = reference.isBlank()
+                ? context.render()
+                : reference + "\n\n" + context.render();
         // The whole prompt, so the audit record can reproduce the call. Both
         // halves matter: the instructions AND the spotlighted documents.
         String fullPrompt = systemPrompt + "\n\n---\n\n" + userPrompt;

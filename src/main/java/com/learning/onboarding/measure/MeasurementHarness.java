@@ -1,6 +1,8 @@
 package com.learning.onboarding.measure;
 
 import com.learning.onboarding.agents.ReviewContext;
+import com.learning.onboarding.agents.ReviewOutcome;
+import com.learning.onboarding.agents.ReviewerAgent;
 import com.learning.onboarding.domain.ReviewFinding;
 import com.learning.onboarding.graph.ReviewGraph;
 import com.learning.onboarding.graph.ReviewState;
@@ -50,6 +52,14 @@ public class MeasurementHarness {
     }
 
     public Result run(String configurationLabel, ReviewGraph graph, List<Fixture> fixtures) {
+        return run(configurationLabel, graph, fixtures, true);
+    }
+
+    /**
+     * @param routingMeaningful false when one agent covers every area
+     */
+    public Result run(String configurationLabel, ReviewGraph graph, List<Fixture> fixtures,
+                      boolean routingMeaningful) {
         List<FixtureOutcome> outcomes = new ArrayList<>();
 
         for (Fixture fixture : fixtures) {
@@ -61,30 +71,79 @@ public class MeasurementHarness {
             // thought before it checked itself.
             List<ReviewFinding> reported = state.survivingFindings();
 
-            List<Fixture.ExpectedDefect> caught = new ArrayList<>();
-            List<Fixture.ExpectedDefect> missed = new ArrayList<>();
-
-            for (Fixture.ExpectedDefect defect : fixture.expected()) {
-                if (reported.stream().anyMatch(defect::matchedBy)) {
-                    caught.add(defect);
-                } else {
-                    missed.add(defect);
-                }
-            }
-
-            List<ReviewFinding> unexpected = reported.stream()
-                    .filter(f -> fixture.expected().stream().noneMatch(d -> d.matchedBy(f)))
-                    .toList();
-
-            outcomes.add(new FixtureOutcome(fixture, caught, missed, unexpected,
-                    state.conflicts().size(), state.discarded().size(),
-                    state.allReviewersRan()));
+            FixtureOutcome outcome = score(fixture, reported, state.conflicts().size(),
+                    state.discarded().size(), state.allReviewersRan());
+            outcomes.add(outcome);
 
             log.info("{} / {}: {} caught, {} missed, {} unexpected",
-                    configurationLabel, fixture.id(), caught.size(), missed.size(),
-                    unexpected.size());
+                    configurationLabel, fixture.id(), outcome.caught().size(),
+                    outcome.missed().size(), outcome.unexpected().size());
         }
-        return new Result(configurationLabel, outcomes);
+        return new Result(configurationLabel, outcomes, routingMeaningful);
+    }
+
+    /**
+     * The baseline: one model call per fixture, no graph.
+     *
+     * <p>The graph is the thing being tested, so the control must not use it.
+     * Running the baseline through {@code ReviewGraph} meant a gate node plus a
+     * reviewer node - two calls with the same prompt, and two independent
+     * chances to spot a defect. That is not "one prompt does everything", it is
+     * the multi-agent design with worse prompts, and it flatters the baseline on
+     * recall while doubling the cost attributed to it.
+     *
+     * <p>No conflict detection and no grounding pass, which matches
+     * configuration 2: with no verifier the graph's verify node returns
+     * immediately, so neither configuration grounds its citations. The
+     * comparison stays like-for-like.
+     */
+    public Result runSingleAgent(String configurationLabel, ReviewerAgent agent,
+                                 List<Fixture> fixtures) {
+        List<FixtureOutcome> outcomes = new ArrayList<>();
+
+        for (Fixture fixture : fixtures) {
+            ReviewContext context = loader.toContext(fixture);
+            ReviewOutcome outcome = agent.review(context);
+
+            // A reviewer that could not run is not a reviewer that found
+            // nothing - the same distinction the graph makes, kept here so a
+            // rate-limited baseline cannot look like a clean one.
+            List<ReviewFinding> reported =
+                    outcome.succeeded() ? outcome.findings() : List.of();
+
+            outcomes.add(score(fixture, reported, 0, 0, outcome.succeeded()));
+
+            log.info("{} / {}: {} finding(s){}", configurationLabel, fixture.id(),
+                    reported.size(), outcome.succeeded() ? "" : " - REVIEWER FAILED");
+        }
+        // One agent covering every area has no routing to be right about.
+        return new Result(configurationLabel, outcomes, false);
+    }
+
+    /** Scores one fixture's reported findings against its planted defects. */
+    private FixtureOutcome score(Fixture fixture, List<ReviewFinding> reported,
+                                 int conflicts, int discarded, boolean complete) {
+        List<Fixture.ExpectedDefect> caught = new ArrayList<>();
+        List<Fixture.ExpectedDefect> missed = new ArrayList<>();
+        List<Fixture.ExpectedDefect> routed = new ArrayList<>();
+
+        for (Fixture.ExpectedDefect defect : fixture.expected()) {
+            if (reported.stream().anyMatch(defect::matchedBy)) {
+                caught.add(defect);
+                if (reported.stream().anyMatch(defect::routedCorrectly)) {
+                    routed.add(defect);
+                }
+            } else {
+                missed.add(defect);
+            }
+        }
+
+        List<ReviewFinding> unexpected = reported.stream()
+                .filter(f -> fixture.expected().stream().noneMatch(d -> d.matchedBy(f)))
+                .toList();
+
+        return new FixtureOutcome(fixture, caught, missed, routed, unexpected,
+                conflicts, discarded, complete);
     }
 
     /** What happened to one fixture. */
@@ -92,14 +151,22 @@ public class MeasurementHarness {
             Fixture fixture,
             List<Fixture.ExpectedDefect> caught,
             List<Fixture.ExpectedDefect> missed,
+            List<Fixture.ExpectedDefect> routed,
             List<ReviewFinding> unexpected,
             int conflicts,
             int discardedUngrounded,
             boolean complete
     ) {}
 
-    /** One configuration's results across every fixture. */
-    public record Result(String configuration, List<FixtureOutcome> outcomes) {
+    /**
+     * One configuration's results across every fixture.
+     *
+     * @param routingMeaningful false for a single agent covering every area -
+     *                          it has no routing to get right, so reporting a
+     *                          routing score for it would invent a failure
+     */
+    public record Result(String configuration, List<FixtureOutcome> outcomes,
+                         boolean routingMeaningful) {
 
         public int seeded() {
             return outcomes.stream().mapToInt(o -> o.fixture().expected().size()).sum();
@@ -109,9 +176,28 @@ public class MeasurementHarness {
             return outcomes.stream().mapToInt(o -> o.caught().size()).sum();
         }
 
-        /** Detected defects over planted defects. */
+        /**
+         * Detected defects over planted defects, regardless of which agent
+         * found it. The number that is comparable across configurations.
+         */
         public double recall() {
             return seeded() == 0 ? 0 : (double) caught() / seeded();
+        }
+
+        public int routed() {
+            return outcomes.stream().mapToInt(o -> o.routed().size()).sum();
+        }
+
+        /**
+         * Of the defects that were detected, how many reached the reviewer whose
+         * area they belong to.
+         *
+         * <p>Denominator is caught, not seeded: this asks whether detection went
+         * to the right place, not how much was detected. Mixing the two would
+         * make a configuration that finds less look better at routing.
+         */
+        public double routingAccuracy() {
+            return caught() == 0 ? 0 : (double) routed() / caught();
         }
 
         /**
@@ -171,11 +257,18 @@ public class MeasurementHarness {
         }
 
         public String summary() {
+            String routing = routingMeaningful
+                    ? "routing %.2f (%d/%d caught reached the right reviewer)"
+                            .formatted(routingAccuracy(), routed(), caught())
+                    : "routing n/a (one agent covers every area)";
+
             return """
                     %-34s  recall %.2f (%d/%d)   false positives %.2f (%d over %d clean)
+                      %s
                       %d finding(s) need human review, %d discarded as ungrounded, %d conflict(s)%s"""
                     .formatted(configuration, recall(), caught(), seeded(),
                             falsePositiveRate(), falsePositives(), cleanFixtures(),
+                            routing,
                             needsReview(), ungroundedDiscarded(), conflictsFound(),
                             incompleteRuns() == 0 ? ""
                                     : "%n  WARNING: %d fixture(s) had a reviewer that did not run - "

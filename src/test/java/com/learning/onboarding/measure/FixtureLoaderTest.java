@@ -129,14 +129,26 @@ class FixtureLoaderTest {
     }
 
     @Test
-    @DisplayName("the right problem from the wrong reviewer does not count")
-    void wrongAreaDoesNotCount() {
+    @DisplayName("the right problem from the wrong reviewer counts as found, not as routed")
+    void wrongAreaIsFoundButMisrouted() {
         var defect = new Fixture.ExpectedDefect(ReviewArea.COMPLIANCE, Severity.MAJOR,
                 null, List.of("scope"), "note");
 
-        assertFalse(defect.matchedBy(finding(ReviewArea.QUALITY, Severity.BLOCKING,
-                "scope problem", null)),
-                "which reviewer caught it is part of what is being measured");
+        ReviewFinding fromWrongArea =
+                finding(ReviewArea.QUALITY, Severity.BLOCKING, "scope problem", null);
+
+        // This assertion used to be assertFalse, and the intent behind it was
+        // right: which reviewer caught it IS part of what is being measured.
+        // The side effect was not. The single-agent baseline stamps every
+        // finding with whichever area slot it was constructed with, so six of
+        // eleven planted defects could never match and its recall was capped at
+        // 0.45 by construction - the comparison measured the harness.
+        assertTrue(defect.matchedBy(fromWrongArea),
+                "the defect was detected, whoever found it");
+
+        // The original intent, kept and made explicit.
+        assertFalse(defect.routedCorrectly(fromWrongArea),
+                "but it did not reach the reviewer whose area it is");
     }
 
     @Test
