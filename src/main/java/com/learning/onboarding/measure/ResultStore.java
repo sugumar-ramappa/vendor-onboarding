@@ -110,10 +110,31 @@ public final class ResultStore {
             if (files.isEmpty()) {
                 sb.append("_No configurations recorded yet._\n");
             } else {
-                sb.append("| # | configuration | recall | caught/seeded | false positives | routing |\n")
-                  .append("|---|---|---:|---:|---:|---:|\n");
+                sb.append("| # | configuration | fixtures | recall | caught/seeded | false positives | routing |\n")
+                  .append("|---|---|---:|---:|---:|---:|---:|\n");
+                var fixtureCounts = new java.util.LinkedHashSet<String>();
                 for (Path f : files) {
-                    sb.append(rowFrom(Files.readString(f))).append('\n');
+                    String json = Files.readString(f);
+                    fixtureCounts.add(field(json, "fixtures"));
+                    sb.append(rowFrom(json)).append('\n');
+                }
+
+                // A recall figure over two fixtures looks exactly like a recall
+                // figure over seven. The daily quota is smaller than a single
+                // configuration, so a half-finished one is the normal state
+                // rather than an accident - and the moment two configurations
+                // cover different fixtures, this table stops being a comparison
+                // and starts being two unrelated numbers side by side.
+                //
+                // Said loudly here rather than left to the reader, because the
+                // failure is silent: the table renders perfectly either way.
+                if (fixtureCounts.size() > 1) {
+                    sb.append("\n> **NOT COMPARABLE YET.** These configurations were ")
+                      .append("measured over different numbers of fixtures (")
+                      .append(String.join(", ", fixtureCounts))
+                      .append("). Recall is only comparable across configurations ")
+                      .append("run on the same set, so treat the rows above as ")
+                      .append("progress, not as a result.\n");
                 }
                 sb.append("\n## Raw\n\n");
                 for (Path f : files) {
@@ -211,8 +232,9 @@ public final class ResultStore {
 
     /** Pull the handful of headline numbers back out for the summary table. */
     private String rowFrom(String json) {
-        return "| %s | %s | %s | %s/%s | %s | %s |".formatted(
+        return "| %s | %s | %s | %s | %s/%s | %s | %s |".formatted(
                 field(json, "configuration"), field(json, "label"),
+                field(json, "fixtures"),
                 field(json, "recall"), field(json, "caught"), field(json, "seeded"),
                 field(json, "falsePositives"),
                 "true".equals(field(json, "routingMeaningful"))

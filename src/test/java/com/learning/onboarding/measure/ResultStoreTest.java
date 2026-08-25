@@ -123,6 +123,54 @@ class ResultStoreTest {
     }
 
     @Test
+    @DisplayName("a report warns when configurations covered different fixture sets")
+    void differentFixtureCountsAreFlaggedAsNotComparable(@TempDir Path dir) throws IOException {
+        // The normal mid-experiment state: the daily quota is smaller than one
+        // configuration, so config 1 finishes over 7 fixtures while config 2 is
+        // only 2 in. Recall over 2 fixtures renders identically to recall over
+        // 7, and the table looks like a comparison when it is not one.
+        var sevenFixtures = new MeasurementHarness.Result("single agent",
+                List.of(outcome("F01", false, 1, 1), outcome("F02", false, 1, 1),
+                        outcome("F03", false, 1, 1), outcome("F04", false, 1, 1),
+                        outcome("F05", false, 1, 1), outcome("F06", false, 1, 1),
+                        outcome("F07", true, 0, 0)), false);
+        var twoFixtures = new MeasurementHarness.Result("gate + four agents",
+                List.of(outcome("F01", false, 1, 1), outcome("F02", false, 1, 0)), true);
+
+        var store = new ResultStore(dir);
+        store.save(1, sevenFixtures);
+        store.save(2, twoFixtures);
+        store.writeReport();
+
+        assertThat(Files.readString(dir.resolve("RESULTS.md")))
+                .contains("NOT COMPARABLE YET")
+                .contains("7")
+                .contains("2");
+    }
+
+    @Test
+    @DisplayName("no warning when every configuration covered the same fixtures")
+    void sameFixtureCountIsNotFlagged(@TempDir Path dir) throws IOException {
+        var store = new ResultStore(dir);
+        store.save(1, result("single agent"));
+        store.save(2, result("gate + four agents"));
+        store.writeReport();
+
+        assertThat(Files.readString(dir.resolve("RESULTS.md")))
+                .doesNotContain("NOT COMPARABLE");
+    }
+
+    private static MeasurementHarness.FixtureOutcome outcome(
+            String id, boolean clean, int seeded, int caught) {
+        var f = fixture(id, clean, seeded);
+        return new MeasurementHarness.FixtureOutcome(f,
+                f.expected().subList(0, caught),
+                f.expected().subList(caught, seeded),
+                f.expected().subList(0, caught),
+                List.of(), 0, 0, true);
+    }
+
+    @Test
     @DisplayName("a report with nothing recorded says so instead of failing")
     void emptyReportIsHonest(@TempDir Path dir) throws IOException {
         new ResultStore(dir).writeReport();
