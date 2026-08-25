@@ -6,6 +6,25 @@
 # the web server keeps the JVM up, and the process sits there holding 8080 until
 # something kills it. The next day's run then fails at startup - which costs no
 # quota, but wastes the window if nobody is watching.
+# NO WEB SERVER AT ALL for this profile.
+#
+# port: 0 alone was not enough, and the difference cost fifteen minutes per
+# configuration. The measurement finished at 18:33:08 and the JVM was still
+# alive at 18:48:29, when it was killed by hand - Tomcat had started, so the
+# process had a non-daemon thread and would never exit on its own.
+#
+# CommandLineRunner completing does not end a web application. With
+# web-application-type: none there is no server, so the JVM exits the moment the
+# run finishes. That is what makes an unattended multi-day measurement possible
+# at all: a run that never terminates cannot be scripted, and a human has to sit
+# and watch each configuration to notice it is done.
+#
+# port: 0 stays as a second line of defence - if something re-enables the web
+# stack, it must not collide with the app on 8080 or with an ssh tunnel.
+spring:
+  main:
+    web-application-type: none
+
 server:
   port: 0
 

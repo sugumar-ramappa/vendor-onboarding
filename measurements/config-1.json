@@ -1,0 +1,26 @@
+{
+  "configuration": 1,
+  "label": "single agent, all five areas",
+  "recordedAt": "2026-08-25T13:19:08.155706Z",
+  "fixtures": 1,
+  "seeded": 1,
+  "caught": 1,
+  "recall": 1.0000,
+  "falsePositives": 0,
+  "routingMeaningful": false,
+  "routingAccuracy": 1.0000,
+  "perFixture": [
+{
+  "fixture": "F01",
+  "clean": false,
+  "seeded": 1,
+  "caught": 1,
+  "missed": 0,
+  "routedCorrectly": 1,
+  "unexpectedFindings": 1,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true
+}
+  ]
+}
