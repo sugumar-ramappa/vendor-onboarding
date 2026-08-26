@@ -52,7 +52,16 @@ public class ReferenceDataTools {
 
     // ------------------------------------------------------------- results --
 
-    public record RequiredDocument(String documentType, boolean mandatory, String note) {}
+    /**
+     * @param appliesWhen condition under which {@code mandatory} holds, or null
+     *                    when the requirement is unconditional. Three rows are
+     *                    conditional and every condition used to live in
+     *                    {@code note}, where a reviewer reads it as commentary
+     *                    rather than as part of the rule - see
+     *                    V5__required_document_applies_when.sql.
+     */
+    public record RequiredDocument(String documentType, boolean mandatory,
+                                   String appliesWhen, String note) {}
 
     public record ComplianceRule(String requirementCode, List<String> acceptedStandards,
                                  String appliesWhen, String description) {}
@@ -70,6 +79,12 @@ public class ReferenceDataTools {
             delivery model. Call this before judging whether a submission pack is
             complete. Returns mandatory and optional document types; a document
             being present says nothing about whether its contents are valid.
+
+            'appliesWhen' is a condition that must hold before a mandatory document
+            is actually required - for example 'any SKU in the application is marked
+            hazardous'. Check it against the application before reporting the
+            document as missing. A mandatory document whose condition does not hold
+            is NOT missing, and reporting it blocks a vendor who never needed it.
             """)
     public List<RequiredDocument> requiredDocuments(
             @ToolParam(description = "product category, e.g. POWER_TOOLS") String productCategory,
@@ -78,7 +93,7 @@ public class ReferenceDataTools {
         log.debug("tool requiredDocuments({}, {})", productCategory, deliveryModel);
         // '*' rows apply to every category; NULL delivery_model to every model.
         return jdbc.query("""
-                SELECT document_type, mandatory, note
+                SELECT document_type, mandatory, applies_when, note
                 FROM required_document
                 WHERE (product_category = ? OR product_category = '*')
                   AND (delivery_model IS NULL OR delivery_model = ?)
@@ -87,6 +102,7 @@ public class ReferenceDataTools {
                 (rs, n) -> new RequiredDocument(
                         rs.getString("document_type"),
                         rs.getBoolean("mandatory"),
+                        rs.getString("applies_when"),
                         rs.getString("note")),
                 productCategory, deliveryModel);
     }

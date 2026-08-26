@@ -64,7 +64,9 @@ public class MeasurementHarness {
 
         for (Fixture fixture : fixtures) {
             ReviewContext context = loader.toContext(fixture);
+            long started = System.currentTimeMillis();
             ReviewState state = graph.review(context);
+            long wallClockMs = System.currentTimeMillis() - started;
 
             // Surviving findings only. A finding the verifier refuted was not
             // shown to anyone, so counting it would measure what the system
@@ -72,7 +74,7 @@ public class MeasurementHarness {
             List<ReviewFinding> reported = state.survivingFindings();
 
             FixtureOutcome outcome = score(fixture, reported, state.conflicts().size(),
-                    state.discarded().size(), state.allReviewersRan());
+                    state.discarded().size(), state.allReviewersRan(), wallClockMs);
             outcomes.add(outcome);
 
             log.info("{} / {}: {} caught, {} missed, {} unexpected",
@@ -103,7 +105,9 @@ public class MeasurementHarness {
 
         for (Fixture fixture : fixtures) {
             ReviewContext context = loader.toContext(fixture);
+            long started = System.currentTimeMillis();
             ReviewOutcome outcome = agent.review(context);
+            long wallClockMs = System.currentTimeMillis() - started;
 
             // A reviewer that could not run is not a reviewer that found
             // nothing - the same distinction the graph makes, kept here so a
@@ -111,7 +115,7 @@ public class MeasurementHarness {
             List<ReviewFinding> reported =
                     outcome.succeeded() ? outcome.findings() : List.of();
 
-            outcomes.add(score(fixture, reported, 0, 0, outcome.succeeded()));
+            outcomes.add(score(fixture, reported, 0, 0, outcome.succeeded(), wallClockMs));
 
             log.info("{} / {}: {} finding(s){}", configurationLabel, fixture.id(),
                     reported.size(), outcome.succeeded() ? "" : " - REVIEWER FAILED");
@@ -122,7 +126,8 @@ public class MeasurementHarness {
 
     /** Scores one fixture's reported findings against its planted defects. */
     private FixtureOutcome score(Fixture fixture, List<ReviewFinding> reported,
-                                 int conflicts, int discarded, boolean complete) {
+                                 int conflicts, int discarded, boolean complete,
+                                 long wallClockMs) {
         List<Fixture.ExpectedDefect> caught = new ArrayList<>();
         List<Fixture.ExpectedDefect> missed = new ArrayList<>();
         List<Fixture.ExpectedDefect> routed = new ArrayList<>();
@@ -143,10 +148,25 @@ public class MeasurementHarness {
                 .toList();
 
         return new FixtureOutcome(fixture, caught, missed, routed, unexpected,
-                conflicts, discarded, complete);
+                conflicts, discarded, complete, wallClockMs);
     }
 
     /** What happened to one fixture. */
+    /**
+     * @param wallClockMs how long this fixture took end to end.
+     *
+     * <p>Wall clock, deliberately, not the sum of the model calls. Configuration 2
+     * makes five calls but runs four of them concurrently, so summing would report
+     * it as five times slower than the baseline when it is not. Cost and latency do
+     * not scale together here and the whole point of recording this is to show
+     * where they diverge.
+     *
+     * <p><b>Only comparable within one uncached, unthrottled run.</b> A cached call
+     * returns in about a millisecond and a rate-limited one spends 20 seconds in
+     * backoff, so either will dominate this number completely. It is recorded
+     * always and interpreted only when those two conditions hold - see
+     * {@code cachedCalls} beside it in the results file.
+     */
     public record FixtureOutcome(
             Fixture fixture,
             List<Fixture.ExpectedDefect> caught,
@@ -155,7 +175,8 @@ public class MeasurementHarness {
             List<ReviewFinding> unexpected,
             int conflicts,
             int discardedUngrounded,
-            boolean complete
+            boolean complete,
+            long wallClockMs
     ) {}
 
     /**

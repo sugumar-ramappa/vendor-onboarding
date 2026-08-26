@@ -1,0 +1,68 @@
+{
+  "id": "F16",
+  "description": "Paint and chemicals vendor selling only brushes and rollers. No SKU is hazardous, so SAFETY_DATA_SHEET does not apply and demanding it is a false positive. The sibling of F11, which is the same category WITH a hazardous SKU and where the same document IS required.",
+  "clean": true,
+  "applicationJson": {
+    "applicationId": "F16-APP",
+    "vendorName": "Halden Brushware Ltd",
+    "category": "PAINT_AND_CHEMICALS",
+    "deliveryModel": "DISTRIBUTION_CENTRE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "HAL-BRU-02",
+        "description": "Paint brush 2in, synthetic bristle",
+        "gtin": "5088888000018",
+        "casePack": 24,
+        "caseWeightKg": "3.4",
+        "hazardous": false
+      },
+      {
+        "vendorSku": "HAL-ROL-09",
+        "description": "Paint roller sleeve 9in, medium pile",
+        "gtin": "5088888000025",
+        "casePack": 36,
+        "caseWeightKg": "5.1",
+        "hazardous": false
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "HALDEN BRUSHWARE LTD\nCompany number 08554433\nRegistered office: 12 Calder Way, Wakefield\nTrading since 2012.\nWe supply decorating tools only. We do not manufacture, blend, decant or supply paints, solvents, aerosols or any hazardous substance."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nHAL-BRU-02  Paint brush 2in synthetic bristle  GTIN 5088888000018  case pack 24  3.4kg\nHAL-ROL-09  Paint roller sleeve 9in medium pile  GTIN 5088888000025  case pack 36  5.1kg\nNo hazardous goods. No aerosols. No liquids."
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-5088888\nInsured: Halden Brushware Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 10,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 7.8m. Net assets GBP 2.2m. Filed on time. Unqualified opinion.\nStandard payment terms offered: 60 days."
+      },
+      {
+        "documentId": "edi-form.pdf",
+        "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nVendor: Halden Brushware Ltd\nGS1 company prefix: 5088888\n\nWe transmit EDIFACT DESADV advance ship notices 36 hours before despatch.\nWe receive EDIFACT ORDERS.\nSSCC pallet labelling supported.\nLead time 8 days."
+      },
+      {
+        "documentId": "gs1.pdf",
+        "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nHalden Brushware Ltd\nCompany prefix: 5088888\nValid to 31 December 2029"
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: 12 Calder Way, Wakefield\nGrade: A\nNon-conformances raised: none\nAudit date: 20 February 2026"
+      }
+    ]
+  },
+  "expected": []
+}

@@ -56,12 +56,55 @@ public final class ResultStore {
 
     private final Path dir;
 
-    public ResultStore() {
-        this(DEFAULT_DIR);
-    }
+    /** Which model produced these results, or null when not recorded. */
+    private final String modelLabel;
 
     public ResultStore(Path dir) {
+        this(dir, null);
+    }
+
+    public ResultStore(Path dir, String modelLabel) {
         this.dir = dir;
+        this.modelLabel = modelLabel;
+    }
+
+    /**
+     * Results for one model, in their own directory.
+     *
+     * <h2>Why the model is in the path and not just in the file</h2>
+     *
+     * {@code config-2.json} names a configuration. It does not name a model - so
+     * measuring configuration 2 on a second provider would overwrite the first
+     * provider's result with a file of the same name and the same shape, and the
+     * summary table would render perfectly either way.
+     *
+     * That is the same failure the review cache key is built to prevent: a
+     * comparison across two models reported as though it were one. The cache
+     * refuses to serve a Gemini finding to a Groq run because the model name is
+     * in the key. This does the equivalent for the results, because the cache
+     * protecting quota is no use if the file protecting the RESULT does not.
+     *
+     * <p>Concretely: the free Gemini tier caps the experiment at 20 requests a
+     * day, so a second provider is the difference between a repeatable
+     * experiment and a six-day one. The moment that became worth doing, this
+     * directory needed splitting.
+     */
+    public static ResultStore forModel(String modelName) {
+        return new ResultStore(DEFAULT_DIR.resolve(slug(modelName)), modelName);
+    }
+
+    /**
+     * A model name that is safe as a directory name.
+     *
+     * <p>Provider model ids carry slashes - {@code openai/gpt-oss-120b} - and a
+     * slash in a path segment silently creates a nested directory rather than
+     * failing, which would scatter one run across two levels.
+     */
+    static String slug(String modelName) {
+        String cleaned = modelName == null ? "unknown"
+                : modelName.replaceAll("[^A-Za-z0-9._-]+", "-")
+                           .replaceAll("(^-+)|(-+$)", "");
+        return cleaned.isEmpty() ? "unknown" : cleaned;
     }
 
     /**
@@ -74,14 +117,52 @@ public final class ResultStore {
      * configuration.
      */
     public void save(int configNumber, MeasurementHarness.Result result) {
+        // A fixture whose reviewers did not all run has a recall figure that
+        // looks exactly like a real one and means nothing. Such a run is written
+        // to incomplete/ instead - kept for inspection, but out of the directory
+        // writeReport() reads, so it can never be rendered as a result and can
+        // never overwrite a good earlier result for the same configuration.
+        //
+        // WHY THIS EXISTS
+        // Configurations 2 and 3 were once saved with six of fourteen fixtures
+        // unfinished, after a daily token cap was reached mid-run. Configuration
+        // 3 then appeared to cut false positives from 7 to 2 - precisely the
+        // improvement a verifier is supposed to produce. It was an artefact: the
+        // reviewers that would have raised those findings never ran, so there was
+        // nothing to refute.
+        //
+        // A number that moves the way the hypothesis predicts, for a reason
+        // unrelated to the hypothesis, is the most dangerous output a measurement
+        // can produce - it is the one nobody questions. This class already
+        // refuses to imply comparability across different fixture COUNTS; not
+        // checking whether those fixtures actually finished was the same bug with
+        // the guard missing.
+        long unfinished = result.outcomes().stream()
+                .filter(o -> !o.complete()).count();
+        Path target = unfinished == 0 ? dir : dir.resolve("incomplete");
+
         try {
-            Files.createDirectories(dir);
-            Path file = dir.resolve("config-%d.json".formatted(configNumber));
+            Files.createDirectories(target);
+            Path file = target.resolve("config-%d.json".formatted(configNumber));
             Files.writeString(file, toJson(configNumber, result),
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+            if (unfinished > 0) {
+                System.out.printf("""
+                          NOT RECORDED AS A RESULT: configuration %d had %d of %d
+                          fixture(s) where a reviewer did not run, so its recall is
+                          not measuring what it appears to. Written to
+                          %s for inspection instead.
+
+                          Re-run this configuration once the limit that stopped it
+                          has cleared. Every call that DID succeed is cached, so the
+                          re-run pays only for what this one never reached.
+                        %n""", configNumber, unfinished, result.outcomes().size(),
+                        file);
+            }
         } catch (IOException e) {
-            System.out.printf("  WARNING: could not write measurements/config-%d.json: %s%n",
-                    configNumber, e.getMessage());
+            System.out.printf("  WARNING: could not write %s/config-%d.json: %s%n",
+                    target, configNumber, e.getMessage());
         }
     }
 
@@ -99,8 +180,19 @@ public final class ResultStore {
         try {
             Files.createDirectories(dir);
             var sb = new StringBuilder();
-            sb.append("# Measurement results\n\n")
-              .append("Generated ").append(Instant.now()).append("\n\n")
+            sb.append("# Measurement results\n\n");
+            if (modelLabel != null) {
+                // Stated at the top, not in a footnote. Every row below was
+                // produced by this model, and a recall figure from one model
+                // means nothing next to a recall figure from another - the
+                // reader has to know which before reading the table.
+                sb.append("**Model: `").append(modelLabel).append("`.** ")
+                  .append("Every row below was measured on it. Numbers from a ")
+                  .append("different model live in a sibling directory and are ")
+                  .append("NOT comparable with these - the comparison here is ")
+                  .append("between configurations on one model.\n\n");
+            }
+            sb.append("Generated ").append(Instant.now()).append("\n\n")
               .append("Recall and false positives are reported together on purpose. ")
               .append("A system that flags\neverything has perfect recall and is useless; ")
               .append("one that flags nothing has a perfect\nfalse-positive rate and is ")
@@ -136,6 +228,27 @@ public final class ResultStore {
                       .append("run on the same set, so treat the rows above as ")
                       .append("progress, not as a result.\n");
                 }
+            }
+
+            // Named, not omitted. A configuration missing from the table above
+            // because its run was discarded looks identical to one that was never
+            // attempted, and the difference matters: the first needs re-running
+            // and the second needs starting.
+            List<Path> discarded = incompleteFiles();
+            if (!discarded.isEmpty()) {
+                sb.append("\n> **")
+                  .append(discarded.size())
+                  .append(discarded.size() == 1 ? " configuration was" : " configurations were")
+                  .append(" measured but DISCARDED**, because at least one fixture had a ")
+                  .append("reviewer that never ran - a recall figure over partly-reviewed ")
+                  .append("fixtures looks exactly like a real one. Kept in `incomplete/` ")
+                  .append("for inspection: ")
+                  .append(discarded.stream().map(p -> "`" + p.getFileName() + "`")
+                          .collect(java.util.stream.Collectors.joining(", ")))
+                  .append(". Re-run them; cached calls make the retry cheap.\n");
+            }
+
+            if (!files.isEmpty()) {
                 sb.append("\n## Raw\n\n");
                 for (Path f : files) {
                     sb.append("`").append(f.getFileName()).append("`\n\n```json\n")
@@ -159,6 +272,23 @@ public final class ResultStore {
                 .map(Integer::parseInt)
                 .sorted()
                 .toList();
+    }
+
+    /** Runs that were measured and discarded, kept for inspection. */
+    private List<Path> incompleteFiles() {
+        Path incomplete = dir.resolve("incomplete");
+        if (!Files.isDirectory(incomplete)) {
+            return List.of();
+        }
+        try (var stream = Files.list(incomplete)) {
+            return stream.filter(p -> p.getFileName().toString().matches("config-\\d+\\.json"))
+                    .sorted()
+                    .toList();
+        } catch (IOException e) {
+            // A report that cannot list the discarded runs is still a valid
+            // report of the good ones. Not worth failing for.
+            return List.of();
+        }
     }
 
     private List<Path> existingFiles() {
@@ -199,13 +329,15 @@ public final class ResultStore {
                           "unexpectedFindings": %d,
                           "conflicts": %d,
                           "discardedUngrounded": %d,
-                          "reachedCompletion": %b
+                          "reachedCompletion": %b,
+                          "wallClockMs": %d
                         }%s"""
                     .formatted(o.fixture().id(), o.fixture().clean(),
                             o.fixture().expected().size(), o.caught().size(),
                             o.missed().size(), o.routed().size(),
                             o.unexpected().size(), o.conflicts(),
                             o.discardedUngrounded(), o.complete(),
+                            o.wallClockMs(),
                             i < outcomes.size() - 1 ? ",\n" : "\n"));
         }
 
@@ -215,19 +347,54 @@ public final class ResultStore {
                   "label": "%s",
                   "recordedAt": "%s",
                   "fixtures": %d,
+                  "incompleteFixtures": %d,
                   "seeded": %d,
                   "caught": %d,
                   "recall": %.4f,
                   "falsePositives": %d,
                   "routingMeaningful": %b,
                   "routingAccuracy": %.4f,
+                  "medianWallClockMs": %d,
+                  "wallClockCaveat": "Median wall clock per fixture, NOT the sum of model calls - configuration 2 runs four reviewers concurrently, so cost and latency do not scale together. Comparable across configurations ONLY within a single uncached, unthrottled run: a cached call returns in about a millisecond and a rate-limited one spends 20 seconds in backoff, and either dominates this number completely.",
                   "perFixture": [
                 %s  ]
                 }
                 """.formatted(configNumber, r.configuration(), Instant.now(),
-                        outcomes.size(), r.seeded(), r.caught(), r.recall(),
+                        outcomes.size(),
+                        // Recorded in the file, not only in the directory it
+                        // landed in. A file copied out of incomplete/ loses that
+                        // context; this field travels with it.
+                        outcomes.stream().filter(o -> !o.complete()).count(),
+                        r.seeded(), r.caught(), r.recall(),
                         r.falsePositives(), r.routingMeaningful(),
-                        r.routingAccuracy(), perFixture);
+                        r.routingAccuracy(),
+                        // Median, not mean. One rate-limited fixture spends a
+                        // minute in backoff and drags a mean far past anything
+                        // the system actually does.
+                        medianWallClockMs(outcomes),
+                        perFixture);
+    }
+
+    /**
+     * Median wall clock across fixtures.
+     *
+     * <p>Median rather than mean because the distribution is not one a mean
+     * describes: most fixtures take seconds and a rate-limited one takes a
+     * minute of backoff. A single throttled fixture moves a mean past anything
+     * the system actually does, while the median still reports a typical review.
+     */
+    private static long medianWallClockMs(List<MeasurementHarness.FixtureOutcome> outcomes) {
+        if (outcomes.isEmpty()) {
+            return 0;
+        }
+        long[] sorted = outcomes.stream()
+                .mapToLong(MeasurementHarness.FixtureOutcome::wallClockMs)
+                .sorted()
+                .toArray();
+        int mid = sorted.length / 2;
+        return sorted.length % 2 == 1
+                ? sorted[mid]
+                : (sorted[mid - 1] + sorted[mid]) / 2;
     }
 
     /** Pull the handful of headline numbers back out for the summary table. */

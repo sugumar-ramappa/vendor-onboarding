@@ -1,0 +1,92 @@
+# Groq instead of Gemini, for the measurement.
+#
+# WHY THIS PROFILE EXISTS
+# The free Gemini tier allows 20 model requests per day per model. The full
+# experiment - three configurations over 14 fixtures - is 112 requests:
+#
+#   config 1  single agent          14 x 1  =  14
+#   config 2  gate + four agents    14 x 5  =  70
+#   config 3  + verifier            14 x 2  =  28
+#
+# That is six days at 20 a day, and an experiment that takes six days to repeat
+# gets run once. Groq's free tier is limited per MINUTE rather than per day, so
+# the same 112 requests fit in one sitting and the experiment becomes repeatable.
+#
+# It is also far faster per call - single-digit seconds against the 12-42s
+# observed from Gemini - which matters because 112 sequential 30-second calls is
+# an hour of waiting on its own.
+#
+# WHAT THIS DOES NOT DO
+# It does not make Gemini and Groq numbers comparable. The comparison this
+# project makes is between CONFIGURATIONS on one model, and that stays valid
+# because every configuration in a run uses the same model. Comparing a Gemini
+# recall against a Groq recall would be comparing two things while reporting one,
+# so the two runs are reported separately and never in the same table.
+#
+# The review cache key contains the model name, so the two cannot silently mix
+# even by accident - a Groq run cannot be served a cached Gemini finding.
+#
+# Usage:
+#   ./mvnw spring-boot:run -Dspring-boot.run.profiles=measure,groq \
+#     -Dspring-boot.run.jvmArguments="\
+#       -Djavax.net.ssl.trustStore=$HOME/.certs/java-truststore.p12 \
+#       -Djavax.net.ssl.trustStorePassword=changeit \
+#       -Dmeasure.configs=1"
+#
+# THE TRUSTSTORE IS NOT OPTIONAL ON AN INSPECTED NETWORK
+# api.groq.com is served through a TLS-inspecting proxy here, which re-signs the
+# connection with a private certificate authority. Browsers and Go binaries
+# accept it because it is installed in the operating system keychain; the JVM has
+# its own truststore and does not consult the keychain, so it fails with
+#
+#   SSLHandshakeException: PKIX path building failed
+#
+# which reads like Groq being unreachable and is nothing of the kind.
+# generativelanguage.googleapis.com is NOT inspected here, which is exactly why
+# Gemini worked from Java with no extra configuration and Groq does not.
+#
+# Build the truststore once (JDK roots plus the locally installed ones):
+#   see docs/engineering-log.md, "the JVM does not read the system keychain"
+
+spring:
+  ai:
+    # Both provider starters are on the classpath, so one has to be chosen or
+    # Spring AI cannot know which ChatModel to build. Without this the context
+    # fails on an ambiguous bean rather than picking a sensible default.
+    model:
+      chat: openai
+
+    openai:
+      # Groq speaks the OpenAI wire protocol, so the OpenAI starter is the client.
+      # No Groq-specific dependency exists or is needed.
+      base-url: https://api.groq.com/openai/v1
+      # Read from the environment, never committed. Put GROQ_API_KEY in .env -
+      # spring.config.import in application.yml reads that file.
+      api-key: ${GROQ_API_KEY}
+      chat:
+        options:
+          # Pinned explicitly, and checked against the live list first:
+          # `python -m scripts.list_models --backend groq` in ../prompt-eval.
+          #
+          # Groq retires models with no deprecation period. llama-3.3-70b-versatile
+          # was the obvious choice for this and now 404s - it is gone from the
+          # account's model list entirely. So this is pinned, never aliased, and
+          # re-checked before a run rather than assumed.
+          model: openai/gpt-oss-120b
+          temperature: 0.0
+
+onboarding:
+  model:
+    # Overrides the Gemini default. This is the string that lands in the cache key
+    # and on every finding, so it has to name what actually answered.
+    name: openai/gpt-oss-120b
+
+    # Groq limits tokens per minute, not requests per day. A reviewer prompt here
+    # is ~2,600 tokens and configuration 2 fans out four reviewers at once, so
+    # bursting past the window is expected rather than exceptional.
+    #
+    # 20 seconds, not the 35 used for Gemini: a per-minute token window refills
+    # continuously rather than resetting on the minute, so a shorter wait is
+    # enough and three attempts still span over a minute in total.
+    first-backoff-ms: 20000
+    max-attempts: 4

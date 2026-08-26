@@ -66,10 +66,25 @@ public class ReferenceDataGatherer implements EvidenceGatherer {
             // rows cost tokens and give it more to be distracted by.
             for (EvidenceNeed need : needs.stream().distinct().toList()) {
                 switch (need) {
+                    // The condition is rendered INSIDE the requirement, not after
+                    // it. "mandatory - Timber and timber-derived only" reads as a
+                    // rule plus a remark, and a reviewer acts on the rule; the
+                    // completeness gate blocked a vendor selling steel screws for a
+                    // missing timber certificate while quoting that very remark as
+                    // its evidence. "mandatory when any SKU is a timber product"
+                    // is one statement that cannot be half-applied.
+                    //
+                    // Appended only when a condition exists, so unconditional rows
+                    // render exactly as before. That keeps the review cache valid
+                    // for every category whose rulebook did not change - which on a
+                    // free tier is the difference between re-measuring one fixture
+                    // and re-measuring all of them.
                     case REQUIRED_DOCUMENTS -> appendSection(sb, "REQUIRED DOCUMENTS",
                             reference.requiredDocuments(category, delivery).stream()
-                                    .map(d -> "%s (%s)%s".formatted(d.documentType(),
+                                    .map(d -> "%s (%s%s)%s".formatted(d.documentType(),
                                             d.mandatory() ? "mandatory" : "optional",
+                                            d.appliesWhen() == null || d.appliesWhen().isBlank()
+                                                    ? "" : " when " + d.appliesWhen(),
                                             d.note() == null || d.note().isBlank()
                                                     ? "" : " - " + d.note()))
                                     .toList());

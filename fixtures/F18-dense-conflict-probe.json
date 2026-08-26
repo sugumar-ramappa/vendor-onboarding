@@ -1,0 +1,119 @@
+{
+  "id": "F18",
+  "description": "DENSE + CONFLICT PROBE: five defects across three areas, two of them on the SAME SKU from two different reviewers. A conflict cannot be planted deterministically - ConflictDetector needs two different areas on one SKU with a severity gap of at least 2, and severity is the model's judgement. So this makes a conflict LIKELY by pairing a defect that should read as MINOR (one kilogram over a handling limit) with one that should read as BLOCKING (a flammable aerosol with no hazard classification) on KEL-AER-500. Whether a conflict is raised is an OBSERVATION, not pass or fail: only the five defects below are scored, and zero conflicts here would be a finding about severity calibration rather than a failed fixture.",
+  "clean": false,
+  "applicationJson": {
+    "applicationId": "F18-APP",
+    "vendorName": "Kellerway Surface Care Ltd",
+    "category": "PAINT_AND_CHEMICALS",
+    "deliveryModel": "DIRECT_TO_STORE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "KEL-AER-500",
+        "description": "Surface primer aerosol 500ml",
+        "gtin": "5044444000019",
+        "casePack": 12,
+        "caseWeightKg": "26.0",
+        "hazardous": true
+      },
+      {
+        "vendorSku": "KEL-CLO-10",
+        "description": "Microfibre cloth pack of 10",
+        "gtin": "5044444000026",
+        "casePack": 30,
+        "caseWeightKg": "4.1",
+        "hazardous": false
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "KELLERWAY SURFACE CARE LTD\nCompany number 12887766\nRegistered office: 3 Ardwick Court, Manchester\nIncorporated 14 March 2025.\nWe blend and fill aerosol surface treatments."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nKEL-AER-500  Surface primer aerosol 500ml  GTIN 5044444000019  case pack 12  26.0kg  HAZARDOUS\nKEL-CLO-10  Microfibre cloth pack of 10  GTIN 5044444000026  case pack 30  4.1kg"
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-5044444\nInsured: Kellerway Surface Care Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 10,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FIRST PERIOD ACCOUNTS\nPeriod: 14 March 2025 to 31 December 2025.\nTurnover GBP 1.1m. Net assets GBP 180,000.\nNo prior trading history. Company incorporated 14 March 2025.\nStandard payment terms requested: 120 days."
+      },
+      {
+        "documentId": "edi-form.pdf",
+        "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nVendor: Kellerway Surface Care Ltd\nGS1 company prefix: 5044444\n\nWe transmit EDIFACT DESADV advance ship notices 48 hours before despatch.\nWe receive EDIFACT ORDERS.\nCarton labelling supported.\nLead time 21 days from order to delivery."
+      },
+      {
+        "documentId": "gs1.pdf",
+        "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nKellerway Surface Care Ltd\nCompany prefix: 5044444\nValid to 31 December 2029"
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: 3 Ardwick Court, Manchester\nGrade: B\nAudit date: 2 April 2026\nNon-conformances raised: none outstanding."
+      },
+      {
+        "documentId": "sds.pdf",
+        "type": "SAFETY_DATA_SHEET",
+        "text": "SAFETY DATA SHEET\nProduct: KEL-AER-500 Surface primer aerosol 500ml\nSection 1: Identification. Supplier Kellerway Surface Care Ltd.\nSection 2: Hazard identification.\n  Extremely flammable aerosol. Pressurised container.\n  Classification system: none stated.\n  No CLP classification supplied. No GHS pictograms supplied.\nSection 14: Transport. UN1950 Aerosols, flammable.\nRevision date: 1 February 2026"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "area": "COMPLIANCE",
+      "minSeverity": "MAJOR",
+      "sku": "KEL-AER-500",
+      "mustMention": [
+        "classification"
+      ],
+      "note": "The safety data sheet EXISTS, so a completeness check passes - present but non-compliant is the harder case. It states no classification system, and the rulebook accepts only CLP or GHS. Half of the conflict probe: this should read as BLOCKING, which against a MINOR on the same SKU is the gap of 2 that ConflictDetector requires."
+    },
+    {
+      "area": "LOGISTICS",
+      "minSeverity": "MINOR",
+      "sku": "KEL-AER-500",
+      "mustMention": [
+        "weight"
+      ],
+      "note": "26.0kg against a 25kg manual handling limit, direct to store where there is no forklift. Deliberately one kilogram over so it reads as MINOR - the other half of the conflict probe."
+    },
+    {
+      "area": "LOGISTICS",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "lead"
+      ],
+      "note": "21 days against a 10-day maximum for direct-to-store. The ASN at 48 hours passes the 24-hour requirement, so a reviewer that stops at the ASN check misses this."
+    },
+    {
+      "area": "FINANCE",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "terms"
+      ],
+      "note": "120 days requested against a 90-day maximum."
+    },
+    {
+      "area": "FINANCE",
+      "minSeverity": "MINOR",
+      "sku": null,
+      "mustMention": [
+        "trading"
+      ],
+      "note": "Incorporated March 2025, below the two-year minimum. Two findings from the same area are never a conflict - one reviewer raising several of differing severity is a reviewer doing its job."
+    }
+  ]
+}

@@ -83,6 +83,31 @@
     </dependency>
 
     <!--
+      A SECOND provider, for the measurement only.
+
+      Not because Groq is better - because the free Gemini tier allows 20 model
+      requests per day and the full experiment over 14 fixtures is 112. At 20 a
+      day the three configurations take six days, and an experiment that cannot
+      be repeated inside a day gets run once. Once is an anecdote.
+
+      This is the OpenAI starter pointed at Groq's OpenAI-compatible endpoint, so
+      no Groq-specific dependency is involved. Both providers stay on the
+      classpath and `spring.ai.model.chat` picks one - see application-groq.yml.
+
+      WHY SWITCHING MODELS DOES NOT INVALIDATE THE EXPERIMENT
+      The comparison is between CONFIGURATIONS, not between models. As long as
+      every configuration in a given run uses the same model, "does specialisation
+      help" is answered honestly. What is NOT valid is comparing a Gemini number
+      against a Groq number, so the two are reported as separate runs and never
+      in the same table. The cache key already contains the model name, so the
+      two cannot silently mix.
+    -->
+    <dependency>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-starter-model-openai</artifactId>
+    </dependency>
+
+    <!--
       MCP server. This is the reason the project uses Spring AI rather than
       LangChain4j: LangChain4j's MCP support is client-side only.
     -->

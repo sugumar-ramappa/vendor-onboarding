@@ -420,6 +420,120 @@ rulebook. So it forces both configurations to be re-measured, at roughly a full
 day of free-tier quota. That is the honest price of the fix, and it is why the
 fix is scheduled rather than sneaked in.
 
+## A '*' row that cost 23 cached calls
+
+**Symptom.** Fixing the timber bug invalidated far more cache than intended.
+
+**Cause.** `required_document` has three conditionally-mandatory rows, and V5 gave
+all three an `applies_when`. Two belong to one product category each. The third,
+`QUALITY_AUDIT_REPORT`, is a `*` row - it applies to **every** category.
+
+The gatherer was written to append a condition only when one exists, specifically
+so categories with no conditional rules would render byte-identically and keep
+their cache. A `*` row defeats that: the rendered `REQUIRED_DOCUMENTS` block
+changed for all 16 fixtures, and since the review cache key contains the rendered
+prompt, the completeness gate's cache and the single agent's cache both died -
+about 23 model calls, against a free tier allowing roughly 45 a day.
+
+**Fix.** V6 reverts that one row, leaving the two category-scoped conditions in
+place. History shows both migrations rather than an edited V5.
+
+**Why that row can wait and the other two could not.** The direction of the error
+is opposite:
+
+```
+mandatory=true  + condition ignored -> demands a document that is not required
+                                       -> FALSE POSITIVE, and at a gate it also
+                                          suppresses four reviewers
+mandatory=false + condition ignored -> never demands a document that sometimes is
+                                       required -> a MISSED finding at worst
+```
+
+`QUALITY_AUDIT_REPORT` is `mandatory=false`, so it **fails safe**. It is a real
+gap, it is still open, and it should be applied alongside some other change that
+already invalidates the gate's cache so the re-measurement is paid for once.
+
+**The lesson worth keeping.** The cache-preserving design was correct and I
+defeated it on the first use, because I checked *how many rows are conditional*
+(three) and not *how many fixtures each row reaches* (two, two, and all sixteen).
+On a metered API the blast radius of a reference-data edit is a cost, and the
+column that decides that radius here is `product_category`, not the one being
+changed.
+
+## The prompt that asked for a tool that was not there
+
+**This is the entry to read.** A defect that was *invisible* on one provider and
+*fatal* on the next, where the invisible version was the more dangerous one.
+
+**Setup.** The measurement disables MCP tools and pre-resolves each reviewer's
+rulebook into its prompt instead, because a tool call is a second billed request
+and that halves the experiment. The reviewer prompts were never updated to match.
+`logistics-v2` still opens with:
+
+```
+RULES COME FROM TOOLS, NEVER FROM MEMORY
+Call logisticsRequirements with the application's delivery model.
+...
+Also call financeThresholds for the manual handling weight limit.
+```
+
+So the model is instructed - emphatically - to call tools that
+`onboarding.model.tools-enabled=false` has removed.
+
+**On Gemini, nothing happened.** No error, no warning. `logistics-v2` returned an
+empty findings list on all nine calls it ever made:
+
+```
+prompt_version   calls  empty  findings
+logistics-v2         9      9         0
+```
+
+Which reads downstream as *"logistics reviewed this vendor and found nothing
+wrong"* - a clean review. It is not one. Nobody looked.
+
+**On Groq the same prompt hard-fails.** Groq speaks the OpenAI protocol, which
+sends `tool_choice: none` when no tools are attached and *enforces* it:
+
+```
+LOGISTICS failed for F02-APP: 400: Tool choice is none, but model called a tool
+LOGISTICS failed for F04-APP: 400: Tool choice is none, but model called a tool
+LOGISTICS failed for F05-APP: No content to map due to end-of-input
+```
+
+Three failures in the first four fixtures. The model tries to obey the prompt,
+the API refuses, and `ReviewerAgent` correctly records a failure rather than an
+empty list - so the graph reports a reviewer that could not check, which is the
+truth.
+
+**Why the loud version is better.** Identical root cause, and the provider that
+crashed is the one that behaved well. Gemini's silence produced nine clean-looking
+reviews of a vendor nobody had assessed for logistics; Groq produced three
+failures that stopped the run. A defect that announces itself costs an hour. A
+defect that returns a plausible empty answer costs a measurement, and there is
+nothing in the output to suggest anything is wrong.
+
+**It also settled a question this log had recorded as open.** The entry below
+noted a theory - *"the reviewer refuses because it cannot call its tool"* - and
+recorded it as untested, because the probe never reached logistics. Running the
+same prompts against a second provider tested it by accident and confirmed it.
+Two providers is a cheap way to find prompt bugs that one provider silently
+absorbs, and that is worth more than the quota it was adopted for.
+
+**Fix.** `logistics-v3`: the rulebook is described as supplied directly, and the
+prompt states plainly that no tools exist, that a tool call is rejected, and that
+a failed review means "could not check" rather than "found nothing". Paired with
+the `FINANCE_THRESHOLDS` fix below, because they are two halves of one defect - a
+prompt asking for things this configuration does not provide.
+
+**Still open, deliberately.** The other four prompts carry the same instruction
+and have not failed yet - `compliance-v2`, `finance-v2` and `completeness-v2` each
+name one tool, and `logistics-v2` was the only one naming two. "Has not failed
+yet" is not "is correct", and the honest fix is a reference-data preamble stating
+that the rules were supplied and no tools exist, which would repair all five at
+once. It is not done here because it changes the rendered prompt for every
+reviewer, which invalidates the whole cache and would force configuration 1 to be
+re-measured for a change unrelated to it. Sequenced after the current run.
+
 ## The logistics reviewer is asked for data it is never given
 
 **Symptom.** None. Found by reading, while the above was being diagnosed.
@@ -434,20 +548,31 @@ So the case-weight check has been running without the limit it compares against 
 and an optimisation that was justified as *"same SQL, same rows, same prompts,
 only the delivery changes"* did not in fact deliver the same rows.
 
-**Fix, prepared but not applied.** `logistics-v3.txt` is written: it describes the
-rulebook as arriving either inline or from tools, and states that returning no
-findings because a tool was unavailable is the worst outcome, since it reads
-downstream as "logistics found nothing wrong". The one-line gatherer change is
-noted at the `case LOGISTICS` branch in `MeasurementRunner`.
+**Fix, applied.** `rulebookFor(LOGISTICS)` now supplies `LOGISTICS_REQUIREMENTS`
+**and** `FINANCE_THRESHOLDS`, alongside `logistics-v3`. The two were fixed in one
+change deliberately: both are the same defect — a prompt asking for something this
+configuration does not provide — and splitting them would need two measurements to
+establish one fix.
 
-Held back because it invalidates the logistics cache and forces configuration 2
-to be re-measured for a change that is not the root cause. Sequenced third.
+**On the deferral note that used to be here.** This was originally postponed as
+"not the root cause, sequence it third". That was the right call for the Gemini
+run, where the recall gap traced to the timber row and logistics merely looked
+idle. It stopped being right the moment these prompts met a provider that enforces
+`tool_choice`: the same reviewer went from quietly returning nothing to failing
+outright, and a failing reviewer *corrupts* configuration 2 rather than merely
+weakening it. Deferring a fix is a judgement about cost against risk, and the risk
+changed underneath the judgement.
 
-**Worth noting about the tool instruction.** A probe of `logistics-v3` on F03 was
-run to test the "reviewer refuses without its tool" theory. It cost zero model
-requests, because the gate short-circuited before logistics was reached — which
-is how the real cause was found. The theory remains untested, and is recorded
-here as untested rather than as a finding.
+**The theory recorded here as untested is now confirmed.** The original note said
+a probe of `logistics-v3` on F03 cost zero requests because the gate
+short-circuited first, so "the reviewer refuses because it cannot call its tool"
+stayed a guess. Running the identical prompts against Groq tested it by accident:
+`400: Tool choice is none, but model called a tool`. See the entry above.
+
+Worth keeping as a lesson in its own right: **the hypothesis was right and could
+not be confirmed on the provider I had**, because that provider absorbed the
+failure silently. Adopting a second provider for quota reasons paid for itself in
+prompt bugs found.
 
 ---
 

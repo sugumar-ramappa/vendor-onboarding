@@ -1,0 +1,45 @@
+-- Revert the condition on QUALITY_AUDIT_REPORT. Deliberate, and not a mistake
+-- being hidden - V5 set it and this removes it, so the history shows both.
+--
+-- WHY
+-- V5 gave applies_when to the three conditionally-mandatory documents. Two of
+-- them belong to a single product category:
+--
+--   TIMBER_CHAIN_OF_CUSTODY  BUILDING_MATERIALS
+--   SAFETY_DATA_SHEET        PAINT_AND_CHEMICALS
+--
+-- QUALITY_AUDIT_REPORT is a '*' row. It applies to EVERY category, so giving it a
+-- condition changed the rendered REQUIRED_DOCUMENTS block for every fixture -
+-- which invalidated the completeness gate's cache and the single agent's cache
+-- entirely, because the review cache key contains the rendered prompt.
+--
+-- That is roughly 23 model calls of cache, on a free tier that allows about 45 a
+-- day. The gatherer was deliberately written to append a condition only when one
+-- exists precisely so that categories with no conditional rules would render
+-- byte-identically and keep their cache. A '*' row defeats that, and I did not
+-- think about it before populating the column.
+--
+-- WHY THIS ROW CAN WAIT, AND THE OTHER TWO COULD NOT
+-- The direction of the error is opposite:
+--
+--   mandatory=true  + condition ignored  ->  demands a document that is not
+--                                            required  ->  FALSE POSITIVE, and at
+--                                            a gate it also suppresses four
+--                                            reviewers.  This is the timber bug.
+--
+--   mandatory=false + condition ignored  ->  never demands a document that
+--                                            sometimes is required  ->  a MISSED
+--                                            finding at worst. It fails safe.
+--
+-- So the two mandatory=true rows were fixed because they cause the cascade, and
+-- this one is sequenced separately because it costs a day of quota and removes no
+-- risk. It is a real gap and it is recorded in docs/engineering-log.md rather than
+-- quietly dropped.
+--
+-- WHEN TO APPLY IT
+-- Alongside any other change that already invalidates the gate's cache, so the
+-- re-measurement is paid for once. Not on its own.
+
+UPDATE required_document
+   SET applies_when = NULL
+ WHERE document_type = 'QUALITY_AUDIT_REPORT';

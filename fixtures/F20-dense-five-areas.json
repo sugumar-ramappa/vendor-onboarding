@@ -1,0 +1,114 @@
+{
+  "id": "F20",
+  "description": "DENSE: five defects, one in every review area including completeness. The completeness defect is a document that is genuinely missing and genuinely required - unlike F03, where the gate demanded a document the rulebook only appeared to require. Here the gate SHOULD fire, and the question is whether the four substantive reviewers still run and find the rest.",
+  "clean": false,
+  "applicationJson": {
+    "applicationId": "F20-APP",
+    "vendorName": "Ravensmoor Lighting Ltd",
+    "category": "LIGHTING",
+    "deliveryModel": "DIRECT_TO_STORE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "RAV-FLD-50",
+        "description": "LED floodlight 50W IP65",
+        "gtin": "5033333000011",
+        "casePack": 8,
+        "caseWeightKg": "28.4",
+        "hazardous": false
+      },
+      {
+        "vendorSku": "RAV-BAT-04",
+        "description": "Batten luminaire 4ft 40W",
+        "gtin": "6011111000028",
+        "casePack": 6,
+        "caseWeightKg": "11.2",
+        "hazardous": false
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "RAVENSMOOR LIGHTING LTD\nCompany number 07221100\nRegistered office: Bankfield Mill, Rochdale\nTrading since 2011.\nWe import and distribute commercial LED luminaires."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nRAV-FLD-50  LED floodlight 50W IP65  GTIN 5033333000011  case pack 8  28.4kg\nRAV-BAT-04  Batten luminaire 4ft 40W  GTIN 6011111000028  case pack 6  11.2kg"
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-5033333\nInsured: Ravensmoor Lighting Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 3,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 6.4m. Net assets GBP 1.9m. Filed on time. Unqualified opinion.\nStandard payment terms offered: 45 days."
+      },
+      {
+        "documentId": "edi-form.pdf",
+        "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nVendor: Ravensmoor Lighting Ltd\nGS1 company prefix: 5033333\n\nWe transmit per-store EDIFACT DESADV advance ship notices 36 hours before despatch.\nWe receive EDIFACT ORDERS.\nCarton labelling supported at store level.\nLead time 7 days."
+      },
+      {
+        "documentId": "gs1.pdf",
+        "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nRavensmoor Lighting Ltd\nCompany prefix: 5033333\nValid to 31 December 2029"
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: Bankfield Mill, Rochdale\nGrade: C\nAudit date: 22 January 2026\n\nNon-conformances:\n  MAJOR - no incoming inspection records for imported LED drivers.\n    Corrective action due 28 February 2026. Status: OPEN, overdue.\n  MINOR - fire extinguisher inspection lapsed. Status: closed."
+      }
+    ]
+  },
+  "expected": [
+    {
+      "area": "COMPLETENESS",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "electrical safety"
+      ],
+      "note": "LIGHTING requires an ELECTRICAL_SAFETY_CERTIFICATE and none is supplied. Unconditionally mandatory for this category, so unlike F03 the gate is RIGHT to fire. Included deliberately: after the applies_when fix, a genuine missing-document case must still be caught, or the fix would have traded a false positive for a false negative."
+    },
+    {
+      "area": "FINANCE",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "liability"
+      ],
+      "note": "Product liability GBP 3m against a GBP 5m minimum. Public liability is GBP 10m and passes, so reading only the first line clears this vendor."
+    },
+    {
+      "area": "LOGISTICS",
+      "minSeverity": "MAJOR",
+      "sku": "RAV-FLD-50",
+      "mustMention": [
+        "weight"
+      ],
+      "note": "28.4kg against a 25kg manual handling limit, direct to store where there is no forklift. Comfortably over rather than marginal, so this should read as MAJOR - the contrast with F18's deliberately marginal 26.0kg."
+    },
+    {
+      "area": "LOGISTICS",
+      "minSeverity": "MAJOR",
+      "sku": "RAV-BAT-04",
+      "mustMention": [
+        "prefix"
+      ],
+      "note": "The GS1 certificate gives the company prefix as 5033333 and RAV-BAT-04's GTIN starts 6011111 - a barcode belonging to someone else, most likely the original manufacturer. The other SKU's GTIN matches correctly, so this cannot be found by checking one SKU and generalising."
+    },
+    {
+      "area": "QUALITY",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "non-conformance"
+      ],
+      "note": "One open overdue major beside one closed minor. Counting non-conformances gives two; what matters is that one is open, major and past its due date."
+    }
+  ]
+}

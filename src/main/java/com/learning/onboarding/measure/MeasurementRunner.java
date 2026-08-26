@@ -79,6 +79,11 @@ public class MeasurementRunner implements CommandLineRunner {
         this.prompts = prompts;
         this.reviewModel = reviewModel;
         this.cache = cache;
+        // Scoped to the model that will actually answer, so a run on a second
+        // provider cannot overwrite the first provider's results with a file of
+        // the same name. Taken from the model itself rather than a property, so
+        // it cannot disagree with what served the calls.
+        this.store = ResultStore.forModel(reviewModel.modelName());
         this.verifier = verifier;
         this.grounding = grounding;
         this.conflicts = conflicts;
@@ -135,7 +140,7 @@ public class MeasurementRunner implements CommandLineRunner {
      * measurement were lost when the Postgres container was removed, because
      * the only record of the experiment was inside it.
      */
-    private final ResultStore store = new ResultStore();
+    private final ResultStore store;
 
     @Override
     public void run(String... args) throws Exception {
@@ -325,7 +330,18 @@ public class MeasurementRunner implements CommandLineRunner {
         return List.of(
                 reviewer(ReviewArea.COMPLIANCE, "compliance-v2"),
                 reviewer(ReviewArea.QUALITY, "quality-v2"),
-                reviewer(ReviewArea.LOGISTICS, "logistics-v2"),
+                // v3, not v2. v2 instructs the model to fetch its rulebook from
+                // tools, and the measurement disables tools because a tool call
+                // is a second billed request. Gemini responded to that by
+                // silently returning no findings; Groq's OpenAI-compatible
+                // endpoint enforces tool_choice and hard-fails the call:
+                //
+                //   400: Tool choice is none, but model called a tool
+                //
+                // Same defect, invisible on one provider and fatal on the other.
+                // See docs/engineering-log.md, "the prompt that asked for a tool
+                // that was not there".
+                reviewer(ReviewArea.LOGISTICS, "logistics-v3"),
                 reviewer(ReviewArea.FINANCE, "finance-v2"));
     }
 
@@ -356,23 +372,20 @@ public class MeasurementRunner implements CommandLineRunner {
         return switch (area) {
             case COMPLETENESS -> List.of(EvidenceNeed.REQUIRED_DOCUMENTS);
             case COMPLIANCE -> List.of(EvidenceNeed.COMPLIANCE_RULES);
-            // KNOWN GAP, deliberately not fixed yet - see
-            // docs/engineering-log.md, "the gate that hid four reviewers".
+            // Two, not one. The logistics prompt judges case weight against the
+            // manual handling limit, which lives in FINANCE_THRESHOLDS - so
+            // supplying only LOGISTICS_REQUIREMENTS asked a reviewer for a
+            // comparison against a number it was never given. With tools enabled
+            // it fetched both; pre-resolving silently dropped one, which is
+            // exactly the difference an optimisation justified as "same SQL, same
+            // rows, same prompts" is not allowed to make.
             //
-            // The logistics prompt is told to fetch the manual handling weight
-            // limit from financeThresholds as well as its own requirements, and
-            // this supplies only LOGISTICS_REQUIREMENTS - so pre-resolving asks
-            // a reviewer for a judgement using data it was never given. With
-            // tools enabled it fetched both.
-            //
-            // Left alone on purpose. Adding FINANCE_THRESHOLDS changes the
-            // rendered logistics prompt, which invalidates every logistics cache
-            // row and forces configuration 2 to be re-measured. The root cause of
-            // the current recall gap is elsewhere (a conditionally-mandatory
-            // document modelled as unconditionally mandatory), and this project's
-            // rule is one change per measurement. Fix that first, measure it,
-            // then come back to this. logistics-v3.txt is the prepared prompt.
-            case LOGISTICS -> List.of(EvidenceNeed.LOGISTICS_REQUIREMENTS);
+            // Fixed together with logistics-v3 because they are two halves of one
+            // defect: a prompt asking for things this configuration does not
+            // provide. Splitting them would mean two measurements to establish
+            // one fix.
+            case LOGISTICS -> List.of(EvidenceNeed.LOGISTICS_REQUIREMENTS,
+                    EvidenceNeed.FINANCE_THRESHOLDS);
             case FINANCE -> List.of(EvidenceNeed.FINANCE_THRESHOLDS);
             case QUALITY -> List.of();
         };

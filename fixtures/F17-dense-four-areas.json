@@ -1,0 +1,115 @@
+{
+  "id": "F17",
+  "description": "DENSE: one vendor failing in four different areas at once. Every mandatory document is PRESENT, so the completeness gate passes and all four substantive reviewers run - the defects are in what the documents say, not in which ones are missing. This is the fixture shape the shallow set never had: a single agent must find four problems in one pass, while four specialists each have exactly one.",
+  "clean": false,
+  "applicationJson": {
+    "applicationId": "F17-APP",
+    "vendorName": "Brantwood Power Tools Ltd",
+    "category": "POWER_TOOLS",
+    "deliveryModel": "DISTRIBUTION_CENTRE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "BRA-DRL-18V",
+        "description": "Cordless combi drill 18V, 2 batteries",
+        "gtin": "5099999000012",
+        "casePack": 6,
+        "caseWeightKg": "14.2",
+        "hazardous": false
+      },
+      {
+        "vendorSku": "BRA-SAW-190",
+        "description": "Circular saw 190mm, 1400W corded",
+        "gtin": "5099999000029",
+        "casePack": 4,
+        "caseWeightKg": "18.6",
+        "hazardous": false
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "BRANTWOOD POWER TOOLS LTD\nCompany number 09443322\nRegistered office: Sanderson Works, Sheffield\nTrading since 2015.\nWe design and import corded and cordless power tools."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nBRA-DRL-18V  Cordless combi drill 18V with 2 batteries  GTIN 5099999000012  case pack 6  14.2kg\nBRA-SAW-190  Circular saw 190mm 1400W corded  GTIN 5099999000029  case pack 4  18.6kg"
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-5099999\nInsured: Brantwood Power Tools Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 2,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 11.4m. Net assets GBP 3.6m. Filed on time. Unqualified opinion.\nStandard payment terms offered: 60 days."
+      },
+      {
+        "documentId": "edi-form.pdf",
+        "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nVendor: Brantwood Power Tools Ltd\nGS1 company prefix: 5099999\n\nWe transmit EDIFACT DESADV advance ship notices 2 hours before despatch.\nWe receive EDIFACT ORDERS.\nSSCC pallet labelling supported.\nLead time 9 days."
+      },
+      {
+        "documentId": "gs1.pdf",
+        "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nBrantwood Power Tools Ltd\nCompany prefix: 5099999\nValid to 31 December 2029"
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: Sanderson Works, Sheffield\nGrade: C\nAudit date: 14 January 2026\n\nNon-conformances:\n  MAJOR - batch traceability records incomplete for imported motor assemblies.\n    Corrective action due 31 March 2026. Status: OPEN, overdue.\n  MINOR - one calibration certificate missing. Status: closed at re-audit."
+      },
+      {
+        "documentId": "declaration.pdf",
+        "type": "DECLARATION_OF_CONFORMITY",
+        "text": "DECLARATION OF CONFORMITY\nManufacturer: Brantwood Power Tools Ltd\nProducts: BRA-DRL-18V, BRA-SAW-190\nDirectives: 2006/42/EC Machinery, 2014/30/EU EMC\nHarmonised standards applied: EN 62841-1, EN 62841-2-1\nSigned: R. Brantwood, Technical Director, 6 February 2026"
+      },
+      {
+        "documentId": "electrical-safety.pdf",
+        "type": "ELECTRICAL_SAFETY_CERTIFICATE",
+        "text": "ELECTRICAL SAFETY TEST CERTIFICATE\nIssued to: Brantwood Power Tools Ltd\nProduct range: corded and cordless power tools\nStandard: EN 62841\nCertificate number: ESC-2023-4471\nIssued: 3 November 2023\nValid until: 2 November 2025"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "area": "COMPLIANCE",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "expired"
+      ],
+      "note": "The certificate names the right standard and looks entirely in order until the validity date is read. Valid until 2 November 2025, against a go-live of December 2026."
+    },
+    {
+      "area": "FINANCE",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "liability"
+      ],
+      "note": "Public liability is GBP 10m and passes; product liability is GBP 2m against a GBP 5m minimum. Reading only the first line clears this vendor."
+    },
+    {
+      "area": "LOGISTICS",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "asn"
+      ],
+      "note": "The vendor CAN send an ASN, so a check for the capability passes. It arrives 2 hours before despatch against a required 4 - the gap is in the number, not the capability."
+    },
+    {
+      "area": "QUALITY",
+      "minSeverity": "MAJOR",
+      "sku": null,
+      "mustMention": [
+        "non-conformance"
+      ],
+      "note": "One open overdue major beside one closed minor. A count of non-conformances says two; what matters is that one of them is open, major and past its due date."
+    }
+  ]
+}

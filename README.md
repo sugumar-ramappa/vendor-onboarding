@@ -57,9 +57,24 @@ Three configurations over the same seven fixtures. Two are measured:
 3  gate + four agents + verifier    -         -                 -              -
 ```
 
-**The multi-agent configuration currently loses on both numbers.** That is the
-result, and it is reported rather than tuned away — see
-[`measurements/RESULTS.md`](measurements/RESULTS.md) for the raw per-fixture data.
+**These numbers do not answer the question the project asks**, and the honest
+reading is not "single agent wins".
+
+Every one of these fixtures carries **exactly one defect, one per review area**.
+That design measures whether the right document reaches the right reviewer —
+`routingAccuracy`, which scored **1.0000**. It cannot measure whether splitting
+work across specialists beats one generalist, because with one defect there is
+nothing to split: four of the five reviewers have nothing to find on every
+fixture. **The experiment could not have shown multi-agent winning.**
+
+The 0.80 is also one fixture out of five, and it traces entirely to a rulebook
+defect rather than to the architecture — see below.
+
+A dense fixture set was added on 2026-08-26 to test the actual claim, with the
+predicted direction for each class written down first in
+[`measurements/PREDICTIONS.md`](measurements/PREDICTIONS.md) — because redesigning
+an experiment after an unflattering result needs to be checkable rather than
+asserted afterwards.
 
 It is also not the conclusion it looks like. Routing accuracy is **1.0000** —
 every finding made reached the correct reviewer — so nothing was misrouted. The

@@ -43,6 +43,41 @@ spring:
       agentPassword: ${AGENT_DB_PASSWORD:agent-local-dev-only}
 
   ai:
+    # Stated explicitly because TWO provider starters are on the classpath -
+    # google-genai for normal use and openai (pointed at Groq) for the
+    # measurement. Leaving this unset asks Spring AI to guess which ChatModel to
+    # build when both could be built, and the application's default provider is
+    # not something to leave to autoconfiguration precedence. The groq profile
+    # overrides it.
+    model:
+      chat: google-genai
+
+      # Everything this application does NOT use, switched off explicitly.
+      #
+      # A provider starter autoconfigures every model type it supports, not just
+      # the one you wanted. Adding the OpenAI starter for chat therefore also
+      # tried to build its speech, transcription, embedding, image and moderation
+      # models - and each of those demands an OpenAI credential, so the whole
+      # context failed with
+      #
+      #   Failed to instantiate [OpenAiAudioSpeechModel]
+      #   At least one credential source must be specified
+      #
+      # in four tests that have nothing to do with either provider.
+      #
+      # `spring.ai.model.chat` selects the CHAT provider; it says nothing about
+      # the other types, and they do not default to off. This application uses
+      # chat and only chat - no EmbeddingModel, ImageModel, SpeechModel,
+      # TranscriptionModel or ModerationModel appears anywhere in it - so naming
+      # them none is accurate rather than a workaround, and it keeps a future
+      # provider starter from quietly requiring another credential.
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+
     google:
       genai:
         # Read from the environment so no key is ever committed.
@@ -114,6 +149,16 @@ onboarding:
       dpi: 200
 
   model:
+    # Which model answered, recorded against every finding and - critically -
+    # part of the review cache key. Defaults to the configured Gemini model so
+    # existing behaviour is unchanged; the groq profile overrides it.
+    #
+    # It must name the model that ACTUALLY served the call. A wrong value here
+    # does not fail, it mislabels: findings get attributed to a model that never
+    # saw them, and cached answers get served across a provider switch, so the
+    # measurement would compare two models while reporting one.
+    name: ${spring.ai.google.genai.chat.options.model}
+
     # Retry, with a first wait past one minute. The free tier limits requests
     # per MINUTE, so a shorter wait is a guaranteed second failure - the window
     # has to roll over. A conventional 1s backoff burns three attempts and

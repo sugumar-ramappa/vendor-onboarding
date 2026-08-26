@@ -40,12 +40,12 @@ class ResultStoreTest {
         return new MeasurementHarness.Result(label, List.of(
                 new MeasurementHarness.FixtureOutcome(withDefects,
                         withDefects.expected(), List.of(), withDefects.expected(),
-                        List.of(), 0, 0, true),
+                        List.of(), 0, 0, true, 1200L),
                 new MeasurementHarness.FixtureOutcome(alsoDefective,
                         List.of(), alsoDefective.expected(), List.of(),
-                        List.of(), 1, 0, true),
+                        List.of(), 1, 0, true, 1400L),
                 new MeasurementHarness.FixtureOutcome(clean,
-                        List.of(), List.of(), List.of(), List.of(), 0, 1, true)),
+                        List.of(), List.of(), List.of(), List.of(), 0, 1, true, 900L)),
                 true);
     }
 
@@ -167,7 +167,7 @@ class ResultStoreTest {
                 f.expected().subList(0, caught),
                 f.expected().subList(caught, seeded),
                 f.expected().subList(0, caught),
-                List.of(), 0, 0, true);
+                List.of(), 0, 0, true, 1000L);
     }
 
     @Test

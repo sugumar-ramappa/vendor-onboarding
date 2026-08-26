@@ -61,7 +61,17 @@ public class SpringAiReviewModel implements ReviewModel {
     public SpringAiReviewModel(
             ChatClient.Builder builder,
             ToolCallback[] referenceDataCallbacks,
-            @Value("${spring.ai.google.genai.chat.options.model}") String modelName,
+            // Provider-agnostic, and it has to be: this string goes into the
+            // cache key and is recorded against every finding. Reading it from
+            // spring.ai.google.genai.* meant that pointing the application at a
+            // different provider would have kept reporting - and CACHING under -
+            // the Gemini model name, so a Groq run would have been served
+            // Gemini's findings with nothing in the output looking wrong.
+            //
+            // That is the failure this project's cache design is explicitly
+            // built to prevent, and the property reference was quietly the one
+            // place it could still happen.
+            @Value("${onboarding.model.name}") String modelName,
             @Value("${onboarding.model.max-attempts:3}") int maxAttempts,
             @Value("${onboarding.model.first-backoff-ms:35000}") long firstBackoffMs,
             @Value("${onboarding.model.tools-enabled:true}") boolean toolsEnabled) {

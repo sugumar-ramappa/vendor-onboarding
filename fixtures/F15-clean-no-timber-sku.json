@@ -1,0 +1,73 @@
+{
+  "id": "F15",
+  "description": "Building materials vendor selling only steel fixings. No SKU contains timber, so TIMBER_CHAIN_OF_CUSTODY does not apply and demanding it is a false positive. This is the regression test for the defect that cost configuration 2 both of its headline numbers.",
+  "clean": true,
+  "applicationJson": {
+    "applicationId": "F15-APP",
+    "vendorName": "Ardleigh Fixings Ltd",
+    "category": "BUILDING_MATERIALS",
+    "deliveryModel": "DISTRIBUTION_CENTRE",
+    "requestedGoLive": "2026-12-01T00:00:00Z",
+    "skus": [
+      {
+        "vendorSku": "ARD-BLT-M10",
+        "description": "Galvanised steel hex bolt M10x80, box of 50",
+        "gtin": "5077777000015",
+        "casePack": 20,
+        "caseWeightKg": "14.5",
+        "hazardous": false
+      },
+      {
+        "vendorSku": "ARD-WSH-M10",
+        "description": "Galvanised steel washer M10, box of 200",
+        "gtin": "5077777000022",
+        "casePack": 40,
+        "caseWeightKg": "9.8",
+        "hazardous": false
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "company-profile.pdf",
+        "type": "COMPANY_PROFILE",
+        "text": "ARDLEIGH FIXINGS LTD\nCompany number 07998877\nRegistered office: Unit 4, Sowerby Trade Park, Halifax\nTrading since 2009.\nWe manufacture and distribute galvanised steel fixings. We do not supply timber or timber-derived products."
+      },
+      {
+        "documentId": "product-list.pdf",
+        "type": "PRODUCT_LIST",
+        "text": "PRODUCT LIST\nARD-BLT-M10  Galvanised steel hex bolt M10x80, box of 50  GTIN 5077777000015  case pack 20  14.5kg\nARD-WSH-M10  Galvanised steel washer M10, box of 200  GTIN 5077777000022  case pack 40  9.8kg\nMaterial: mild steel, hot-dip galvanised to EN ISO 1461. No timber content."
+      },
+      {
+        "documentId": "insurance.pdf",
+        "type": "INSURANCE_CERTIFICATE",
+        "text": "CERTIFICATE OF INSURANCE\nPolicy Number: PL-5077777\nInsured: Ardleigh Fixings Ltd\nPublic Liability:  GBP 10,000,000 any one occurrence\nProduct Liability: GBP 10,000,000 any one occurrence\nTerritorial limits: United Kingdom\nPeriod of insurance: 1 January 2026 to 31 December 2029"
+      },
+      {
+        "documentId": "accounts.pdf",
+        "type": "FINANCIAL_STATEMENTS",
+        "text": "FILED ACCOUNTS 2025\nTurnover GBP 14.2m. Net assets GBP 5.1m. Filed on time. Unqualified opinion.\nStandard payment terms offered: 45 days."
+      },
+      {
+        "documentId": "edi-form.pdf",
+        "type": "EDI_CAPABILITY_FORM",
+        "text": "EDI CAPABILITY DECLARATION\nVendor: Ardleigh Fixings Ltd\nGS1 company prefix: 5077777\n\nWe transmit EDIFACT DESADV advance ship notices 24 hours before despatch.\nWe receive EDIFACT ORDERS.\nSSCC pallet labelling supported.\nLead time 6 days."
+      },
+      {
+        "documentId": "gs1.pdf",
+        "type": "GS1_REGISTRATION",
+        "text": "GS1 UK MEMBERSHIP\nArdleigh Fixings Ltd\nCompany prefix: 5077777\nValid to 31 December 2029"
+      },
+      {
+        "documentId": "audit.pdf",
+        "type": "QUALITY_AUDIT_REPORT",
+        "text": "QUALITY MANAGEMENT AUDIT\nSite: Unit 4, Sowerby Trade Park, Halifax\nGrade: A\nNon-conformances raised: none\nAudit date: 3 March 2026"
+      },
+      {
+        "documentId": "declaration.pdf",
+        "type": "DECLARATION_OF_CONFORMITY",
+        "text": "DECLARATION OF PERFORMANCE\nProducts: ARD-BLT-M10, ARD-WSH-M10\nHarmonised standard: EN 13501\nHot-dip galvanised coating to EN ISO 1461."
+      }
+    ]
+  },
+  "expected": []
+}
