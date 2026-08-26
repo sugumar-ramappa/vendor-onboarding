@@ -68,9 +68,27 @@ public record ReviewContext(
           .append('\n');
 
         sb.append("\nSKUS APPLIED FOR (").append(application.skus().size()).append(")\n");
+        // GTIN included, and it was not.
+        //
+        // The logistics prompt instructs the reviewer to check "are GTINs
+        // registered to the vendor's own company prefix?" - a GTIN borrowed from
+        // the original manufacturer belongs to someone else. The GS1 certificate
+        // in the pack supplies the prefix, so the reviewer had one half of the
+        // comparison and the other half was never rendered.
+        //
+        // It could only ever succeed by accident, when a vendor's PRODUCT_LIST
+        // happened to quote its own barcodes in prose. A fixture whose product
+        // list said "See attached schedule" made the check impossible, and would
+        // have scored a guaranteed miss for every configuration while looking
+        // like a model failure.
+        //
+        // Same shape as the logistics reviewer being told to fetch a threshold
+        // the measurement never supplied: the prompt asks for a judgement the
+        // code does not enable.
         application.skus().forEach(sku -> sb
                 .append("  ").append(sku.vendorSku())
                 .append(" | ").append(sku.description())
+                .append(" | GTIN ").append(sku.gtin())
                 .append(" | case pack ").append(sku.casePack())
                 .append(" | ").append(sku.caseWeightKg()).append("kg")
                 .append(sku.hazardous() ? " | HAZARDOUS" : "")

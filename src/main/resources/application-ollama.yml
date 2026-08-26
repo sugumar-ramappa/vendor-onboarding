@@ -1,0 +1,91 @@
+# Ollama, running locally. No quota, no rate limit, no cost.
+#
+# WHY THIS PROFILE EXISTS
+# Both hosted providers are metered in a way that makes this experiment slow:
+#
+#   Gemini  20 requests/day              a scheduling problem
+#   Groq    8,000 tokens/minute          a throttling problem
+#           200,000 tokens/day           a scheduling problem again
+#
+# A full three-configuration sweep is 8 model calls per fixture, so a hosted run
+# is rationed to about five fixtures a day. Locally there is no ration, which
+# makes this the right place to VALIDATE the harness before spending a hosted
+# window on it: that the fixtures parse, that findings bind to the schema, that
+# scoring matches defects the way it should, and that nothing throws on fixture
+# 14 after an hour of running.
+#
+# WHAT IT IS NOT FOR
+# It is not a substitute for the hosted numbers. llama3.1:8b is a fraction of the
+# size of gemini-3.6-flash or gpt-oss-120b, and its absolute recall will be lower.
+# That is fine for validating the pipeline and NOT fine as a headline result.
+#
+# It IS however a legitimate configuration comparison in its own right: the
+# question is whether specialisation beats a generalist ON ONE MODEL, and that
+# holds whichever model it is. A local sweep answers "does the architecture help
+# this model" honestly. It just cannot be compared against a Groq number.
+#
+# NOTHING HERE CAN CONTAMINATE THE HOSTED RESULTS
+# Two separate mechanisms, both already in place:
+#
+#   the review cache key contains model_name, so an Ollama answer can never be
+#   served to a Gemini or Groq run, and vice versa
+#
+#   ResultStore.forModel() writes to measurements/<model>/, so a local sweep
+#   lands in its own directory and cannot overwrite config-N.json for either
+#   hosted provider
+#
+# Usage:
+#   ./mvnw spring-boot:run -Dspring-boot.run.profiles=measure,ollama \
+#     -Dspring-boot.run.jvmArguments="-Dmeasure.configs=1,2,3"
+#
+# No truststore argument: this is localhost, so the TLS interception that breaks
+# Groq from the JVM does not apply.
+
+spring:
+  ai:
+    # Ollama speaks the OpenAI wire protocol, so the OpenAI starter is the client
+    # and no Ollama-specific dependency is needed. Both provider starters stay on
+    # the classpath and this picks one.
+    model:
+      chat: openai
+
+    openai:
+      # The /v1 matters. Spring AI appends only "/chat/completions" to this, so
+      # omitting it calls http://localhost:11434/chat/completions and Ollama
+      # returns a bare "404: 404" with no hint that the path is the problem.
+      base-url: http://localhost:11434/v1
+      # Ollama ignores the key entirely, but Spring AI requires a non-empty value
+      # or the client fails to construct. Not a secret and deliberately obvious.
+      api-key: ollama-local-no-key-required
+      chat:
+        options:
+          # NOT llama3.1:8b directly. This is a derived model created from a
+          # Modelfile that pins num_ctx to 8192 and temperature to 0.
+          #
+          # Ollama's runtime context defaults far below the model's 131072
+          # maximum and TRUNCATES SILENTLY - the call succeeds and the model
+          # simply never sees the end of the document pack. A reviewer that was
+          # not shown the document it is judging produces a confident, wrong,
+          # entirely plausible answer, which is the worst failure mode available
+          # to this project.
+          #
+          # Recreate with:
+          #   ollama create vendor-review:8b -f Modelfile
+          model: vendor-review:8b
+          temperature: 0.0
+
+onboarding:
+  model:
+    # Lands in the cache key and on every finding. Distinct from the hosted model
+    # names, which is what keeps the three sets of results separate.
+    name: ollama/vendor-review-8b
+
+    # No rate limit locally, so a failed call is a real failure rather than a
+    # scheduled one. Retrying it is unlikely to help and only slows the sweep.
+    max-attempts: 2
+    first-backoff-ms: 1000
+
+    # Local inference is sequential on one machine - concurrency here queues on
+    # the same GPU rather than overlapping, and it makes the wall-clock number
+    # meaningless. One at a time, measured honestly.
+    concurrency: 1

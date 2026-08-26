@@ -80,9 +80,9 @@
       "minSeverity": "MAJOR",
       "sku": null,
       "mustMention": [
-        "expired"
+        "expire"
       ],
-      "note": "The certificate names the right standard and looks entirely in order until the validity date is read. Valid until 2 November 2025, against a go-live of December 2026."
+      "note": "The certificate names the right standard and looks entirely in order until the validity date is read. Valid until 2 November 2025, against a go-live of December 2026. The stem 'expire' rather than 'expired' deliberately - it also matches expires, expiry and expiration, and F05 established that form. A mustMention the model will not produce turns a caught defect into a scored miss, which is a measurement bug rather than a model failure."
     },
     {
       "area": "FINANCE",

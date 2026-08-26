@@ -1,6 +1,6 @@
 {
   "id": "F20",
-  "description": "DENSE: five defects, one in every review area including completeness. The completeness defect is a document that is genuinely missing and genuinely required - unlike F03, where the gate demanded a document the rulebook only appeared to require. Here the gate SHOULD fire, and the question is whether the four substantive reviewers still run and find the rest.",
+  "description": "DENSE: five defects across four areas, with TWO on logistics and two SKUs that must be judged separately. Every mandatory document is present so the completeness gate passes and the reviewers actually run - an earlier draft omitted the electrical safety certificate, which made the gate short-circuit and rebuilt the exact F03 trap inside a fixture meant to test the opposite thing. The certificate is now present but its scope covers only one of the two SKUs.",
   "clean": false,
   "applicationJson": {
     "applicationId": "F20-APP",
@@ -61,18 +61,23 @@
         "documentId": "audit.pdf",
         "type": "QUALITY_AUDIT_REPORT",
         "text": "QUALITY MANAGEMENT AUDIT\nSite: Bankfield Mill, Rochdale\nGrade: C\nAudit date: 22 January 2026\n\nNon-conformances:\n  MAJOR - no incoming inspection records for imported LED drivers.\n    Corrective action due 28 February 2026. Status: OPEN, overdue.\n  MINOR - fire extinguisher inspection lapsed. Status: closed."
+      },
+      {
+        "documentId": "electrical-safety.pdf",
+        "type": "ELECTRICAL_SAFETY_CERTIFICATE",
+        "text": "ELECTRICAL SAFETY TEST CERTIFICATE\nIssued to: Ravensmoor Lighting Ltd\nCertificate number: ESC-2026-8842\nStandard: EN 60598-2-5 Luminaires - Particular requirements - Floodlights\nProduct range covered: LED floodlights, 30W to 150W, IP65 and above\nIssued: 12 January 2026\nValid until: 11 January 2029"
       }
     ]
   },
   "expected": [
     {
-      "area": "COMPLETENESS",
+      "area": "COMPLIANCE",
       "minSeverity": "MAJOR",
-      "sku": null,
+      "sku": "RAV-BAT-04",
       "mustMention": [
-        "electrical safety"
+        "scope"
       ],
-      "note": "LIGHTING requires an ELECTRICAL_SAFETY_CERTIFICATE and none is supplied. Unconditionally mandatory for this category, so unlike F03 the gate is RIGHT to fire. Included deliberately: after the applies_when fix, a genuine missing-document case must still be caught, or the fix would have traded a false positive for a false negative."
+      "note": "The certificate is present, in date, and names a real standard - so a completeness check passes and a date check passes. It covers 'LED floodlights, 30W to 150W' only, and RAV-BAT-04 is a 40W batten luminaire, which is outside that range. Present-but-out-of-scope is the case a reviewer that checks existence and expiry will clear. NOT modelled as a missing document on purpose: that would make the gate short-circuit and the other four defects unreachable, which is the F03 trap this fixture exists to avoid."
     },
     {
       "area": "FINANCE",

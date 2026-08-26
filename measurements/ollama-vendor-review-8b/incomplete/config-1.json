@@ -1,0 +1,30 @@
+{
+  "configuration": 1,
+  "label": "single agent, all five areas",
+  "recordedAt": "2026-08-26T11:14:41.477108Z",
+  "fixtures": 1,
+  "incompleteFixtures": 1,
+  "seeded": 4,
+  "caught": 0,
+  "recall": 0.0000,
+  "falsePositives": 0,
+  "routingMeaningful": false,
+  "routingAccuracy": 0.0000,
+  "medianWallClockMs": 580,
+  "wallClockCaveat": "Median wall clock per fixture, NOT the sum of model calls - configuration 2 runs four reviewers concurrently, so cost and latency do not scale together. Comparable across configurations ONLY within a single uncached, unthrottled run: a cached call returns in about a millisecond and a rate-limited one spends 20 seconds in backoff, and either dominates this number completely.",
+  "perFixture": [
+{
+  "fixture": "F17",
+  "clean": false,
+  "seeded": 4,
+  "caught": 0,
+  "missed": 4,
+  "routedCorrectly": 0,
+  "unexpectedFindings": 0,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": false,
+  "wallClockMs": 580
+}
+  ]
+}
