@@ -420,6 +420,74 @@ rulebook. So it forces both configurations to be re-measured, at roughly a full
 day of free-tier quota. That is the honest price of the fix, and it is why the
 fix is scheduled rather than sneaked in.
 
+## The reviewer was asked to check a number it was never shown
+
+**A pattern, not an incident.** This is the third instance, and naming the shape
+matters more than any one of them: **the prompt asks for a judgement the code does
+not enable.**
+
+```
+logistics-v2   "call financeThresholds for the manual handling limit"
+               -> rulebookFor(LOGISTICS) supplied only LOGISTICS_REQUIREMENTS
+
+logistics-v2   "RULES COME FROM TOOLS - call logisticsRequirements"
+               -> the measurement disables tools
+
+logistics-v2   "are GTINs registered to the vendor's own company prefix?"
+               -> ReviewContext.render() never emitted the GTIN
+```
+
+**Symptom.** None visible. A fixture whose planted defect was a GTIN outside the
+vendor's GS1 prefix would be missed by every configuration, on every model,
+forever - and it would look exactly like a model failure.
+
+**Cause.** `render()` emitted the SKU code, description, case pack, case weight
+and hazard flag. Not the GTIN. The GS1 certificate in the pack supplies the
+prefix, so the reviewer had one half of the comparison and the other half was
+never rendered.
+
+It could only succeed by accident - when a vendor's `PRODUCT_LIST` happened to
+quote its own barcodes in prose. Several fixtures do. F13's says *"See attached
+schedule"*, which made its defect **impossible to detect**.
+
+**How it was found.** Not by running it. A test written that afternoon checks
+every `mustMention` phrase is either present in the pack or a form some measured
+fixture has already produced. It flagged F13's `gtin`, which led to checking
+whether the reviewer ever sees a GTIN. It does not.
+
+**Fix.** `render()` now emits `| GTIN <value> |` per SKU. This changes every
+rendered prompt and therefore invalidates the entire review cache - which cost
+nothing on the day it was made, because the five fixtures due to be measured next
+were new and had no cache.
+
+**Why the pattern is worth carrying.** All three failures are a prompt and an
+implementation drifting apart, and none of them throws. A model asked for
+something it cannot do returns a confident answer built on what it does have, and
+that answer is indistinguishable from a considered one. The prompts are treated
+as documentation and the code as truth; nothing checks they agree.
+
+## The fixture tests that pay for themselves
+
+**Written 2026-08-26, found three defects on their first run.** Three tests in
+`FixtureRulebookTest`, all deterministic, all free:
+
+| Test | Found |
+|---|---|
+| a multi-defect fixture is pack-complete | **F20** planted a missing mandatory document, so the gate would short-circuit and its other four defects become unreachable - the F03 trap rebuilt inside the fixture meant to avoid it |
+| a mustMention is producible | **F17** used `expired` where the proven form is the stem `expire`; **F13** used `gtin`, which led to the bug above |
+| a clean fixture is actually clean | nothing yet - and that is the point, since a clean fixture hiding a real defect makes every false-positive number wrong |
+
+**Why this is the highest-value test in the project.** A fixture bug is otherwise
+only discovered by running it, and running one costs five model calls against a
+tier allowing about forty-five a day. Two fixture bugs had already cost a
+measurement window. These run in five seconds on every build.
+
+The general point: **when verification is metered, move as much of it as possible
+to something unmetered.** Everything checked here - document presence, thresholds,
+weights, GTIN prefixes, lead times - is arithmetic against the same reference
+tables the reviewers read. None of it needed a model, and all of it was previously
+only being checked by one.
+
 ## A '*' row that cost 23 cached calls
 
 **Symptom.** Fixing the timber bug invalidated far more cache than intended.

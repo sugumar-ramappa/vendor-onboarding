@@ -199,6 +199,56 @@ class FixtureRulebookTest {
         assertTrue(broken.isEmpty(), String.join("\n", broken));
     }
 
+    /**
+     * The condition reaches the reviewer as part of the requirement.
+     *
+     * <p>The whole timber fix is that a conditionally-mandatory document must not
+     * be presented as unconditionally mandatory. Migrating the column and never
+     * rendering it would leave the gate reading exactly what it read before, and
+     * every test here would still pass - the regression fixtures F15 and F16
+     * would fail, but only after a model call has been paid for.
+     *
+     * <p>So this asserts the rendered string, which is what the model actually
+     * sees: "mandatory when TIMBER_PRESENT - ..." rather than "mandatory" beside a
+     * note the reviewer treats as commentary.
+     */
+    @Test
+    @DisplayName("a conditional requirement renders its condition inside the requirement")
+    void conditionalRequirementsCarryTheirCondition() {
+        record Rule(String documentType, boolean mandatory, String appliesWhen, String note) {}
+
+        List<Rule> conditional = jdbc.query("""
+                SELECT document_type, mandatory, applies_when, note
+                FROM required_document
+                WHERE applies_when IS NOT NULL
+                """, (rs, n) -> new Rule(rs.getString("document_type"),
+                rs.getBoolean("mandatory"), rs.getString("applies_when"),
+                rs.getString("note")));
+
+        assertTrue(!conditional.isEmpty(),
+                "no conditional requirements found - V5 did not apply, so the "
+                        + "completeness gate is still reading TIMBER_CHAIN_OF_CUSTODY "
+                        + "as unconditionally mandatory");
+
+        List<String> broken = new ArrayList<>();
+        for (Rule rule : conditional) {
+            // Mirrors ReferenceDataGatherer's REQUIRED_DOCUMENTS branch.
+            String rendered = "%s (%s%s)%s".formatted(rule.documentType(),
+                    rule.mandatory() ? "mandatory" : "optional",
+                    rule.appliesWhen() == null || rule.appliesWhen().isBlank()
+                            ? "" : " when " + rule.appliesWhen(),
+                    rule.note() == null || rule.note().isBlank() ? "" : " - " + rule.note());
+
+            if (!rendered.contains("mandatory when") && !rendered.contains("optional when")) {
+                broken.add(rule.documentType() + " renders as: " + rendered);
+            }
+        }
+
+        assertTrue(broken.isEmpty(),
+                "a condition that is not inside the requirement is read as commentary:\n"
+                        + String.join("\n", broken));
+    }
+
     // ------------------------------------------------------------- helpers --
 
     /** Mandatory document types absent from the pack, honouring applies_when. */
