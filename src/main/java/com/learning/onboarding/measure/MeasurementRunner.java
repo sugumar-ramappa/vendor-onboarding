@@ -356,6 +356,22 @@ public class MeasurementRunner implements CommandLineRunner {
         return switch (area) {
             case COMPLETENESS -> List.of(EvidenceNeed.REQUIRED_DOCUMENTS);
             case COMPLIANCE -> List.of(EvidenceNeed.COMPLIANCE_RULES);
+            // KNOWN GAP, deliberately not fixed yet - see
+            // docs/engineering-log.md, "the gate that hid four reviewers".
+            //
+            // The logistics prompt is told to fetch the manual handling weight
+            // limit from financeThresholds as well as its own requirements, and
+            // this supplies only LOGISTICS_REQUIREMENTS - so pre-resolving asks
+            // a reviewer for a judgement using data it was never given. With
+            // tools enabled it fetched both.
+            //
+            // Left alone on purpose. Adding FINANCE_THRESHOLDS changes the
+            // rendered logistics prompt, which invalidates every logistics cache
+            // row and forces configuration 2 to be re-measured. The root cause of
+            // the current recall gap is elsewhere (a conditionally-mandatory
+            // document modelled as unconditionally mandatory), and this project's
+            // rule is one change per measurement. Fix that first, measure it,
+            // then come back to this. logistics-v3.txt is the prepared prompt.
             case LOGISTICS -> List.of(EvidenceNeed.LOGISTICS_REQUIREMENTS);
             case FINANCE -> List.of(EvidenceNeed.FINANCE_THRESHOLDS);
             case QUALITY -> List.of();

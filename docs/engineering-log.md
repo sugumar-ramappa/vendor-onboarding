@@ -308,9 +308,162 @@ architecture or a model change with no way to tell.
 
 ---
 
+# 6. Bugs the measurement caught
+
+The measurement was built to answer "does specialisation help". Its first honest
+answer was "no", and chasing that produced the most interesting defect in the
+project.
+
+## The gate that hid four reviewers
+
+**Symptom.** Over the same seven fixtures, the multi-agent configuration was
+worse on *both* headline numbers:
+
+```
+                                fixtures   recall          false positives
+1  single agent, all five areas     7      1.00  (5/5)           1
+2  gate + four agents               7      0.80  (4/5)           2
+```
+
+Routing accuracy was **1.0000** — every finding that was made reached the correct
+reviewer. So the system was not misrouting. It was not seeing.
+
+**The first wrong answer.** The reviewer caches showed this:
+
+```
+prompt_version   calls  empty  findings
+quality-v2           9      1         8
+compliance-v2        9      5         7
+completeness-v2     15     10         5
+finance-v2           9      8         2
+logistics-v2         9      9         0     <- never fired, ever
+```
+
+`logistics-v2` had produced nothing across nine calls, and the missed defect on
+F03 was a logistics defect — a vendor declaring *"Advance Ship Notice: not
+currently supported"* while shipping into a distribution centre. The obvious
+reading was a broken logistics prompt, and there was a plausible mechanism
+sitting right there: quality is the only reviewer with no tool to call, and
+quality is the only one that reliably fires.
+
+**That reading was wrong**, and one line of run output said so:
+
+```
+F03-APP: pack incomplete (1 finding) - skipping the substantive reviews
+```
+
+The logistics reviewer never ran on F03. It was not silent; it was never asked.
+Nine empty rows meant "asked about six other fixtures, whose defects belonged to
+other areas" — which is the correct answer, not a broken one.
+
+**Cause.** The completeness gate flagged `TIMBER_CHAIN_OF_CUSTODY` as missing,
+`BLOCKING`, `checkType: DETERMINISTIC`, `confidence: 1.0`. Its own quoted
+evidence contains the refutation:
+
+```
+TIMBER_CHAIN_OF_CUSTODY (mandatory) - Timber and timber-derived only
+```
+
+F03 sells `KES-SCR-100`, steel wood screws. Chain of custody does not apply. But
+look at how the requirement is stored:
+
+```
+ product_category    | document_type            | mandatory | note
+ BUILDING_MATERIALS  | TIMBER_CHAIN_OF_CUSTODY  | t         | Timber and timber-derived only
+```
+
+**`required_document` has no `applies_when` column.** `compliance_rule` does —
+the gatherer renders it as *"accepts X when Y"*. For required documents the
+condition is prose in a `note`, beside a boolean that says `true`
+unconditionally. The reviewer read the boolean and rendered the note as
+commentary, which is exactly what the schema told it to do. The model was not
+hallucinating; it was correctly reporting a rulebook that says the wrong thing.
+
+**Why one defect cost two numbers.** The gate short-circuits: an incomplete pack
+skips the substantive reviews and asks the vendor for documents. So a single
+false "incomplete" became:
+
+1. a false positive, from the gate itself, and
+2. a **missed seeded defect**, because the four reviewers that would have caught
+   it never ran.
+
+One data-modelling error, both halves of the score. The single-agent baseline has
+no gate, cannot short-circuit, reviewed everything, and found the ASN problem.
+
+**What this does not show.** It is not evidence against multi-agent review. The
+specialisation worked where it ran — configuration 2 produced *less* noise than
+the baseline on F08 and F10. What it shows is that a gate inherits the
+correctness of its rulebook and then amplifies it, and that a fail-dangerous
+short-circuit turns a recoverable false positive into an unrecoverable miss.
+
+**The deeper problem is the one the code already knows about.**
+`ReviewerAgent.review` is careful that a failed model call returns a recorded
+failure rather than an empty list, because the caller "needs it in order to
+distinguish *nobody looked* from *looked and found nothing*". The graph loses
+that same distinction one level up: four reviewers that never ran are reported
+indistinguishably from four reviewers that ran and were satisfied.
+
+**Fix, not yet applied.** Deliberately, and in this order — one change per
+measurement, or the next number has two possible causes:
+
+1. Add `applies_when` to `required_document`, mirroring `compliance_rule`, and
+   render it. This is the root cause.
+2. Make the gate's short-circuit fail-safe: either run the substantive reviewers
+   regardless and report incompleteness alongside their findings, or restrict the
+   short-circuit to documents whose absence genuinely makes review impossible.
+   A skipped review must never be reported as a clean one.
+3. Only then the smaller logistics gap below.
+
+Step 1 changes the rendered `REQUIRED_DOCUMENTS` block, which invalidates the
+`completeness-v2` **and** `single-v1` cache rows — `single-v1` receives every
+rulebook. So it forces both configurations to be re-measured, at roughly a full
+day of free-tier quota. That is the honest price of the fix, and it is why the
+fix is scheduled rather than sneaked in.
+
+## The logistics reviewer is asked for data it is never given
+
+**Symptom.** None. Found by reading, while the above was being diagnosed.
+
+**Cause.** `logistics-v2` instructs the model to *"call financeThresholds for the
+manual handling weight limit"*. The measurement pre-resolves rulebooks into the
+prompt instead of exposing tools, and `rulebookFor(LOGISTICS)` supplies only
+`LOGISTICS_REQUIREMENTS`. With tools enabled the reviewer fetched both; the
+cost optimisation silently dropped one.
+
+So the case-weight check has been running without the limit it compares against —
+and an optimisation that was justified as *"same SQL, same rows, same prompts,
+only the delivery changes"* did not in fact deliver the same rows.
+
+**Fix, prepared but not applied.** `logistics-v3.txt` is written: it describes the
+rulebook as arriving either inline or from tools, and states that returning no
+findings because a tool was unavailable is the worst outcome, since it reads
+downstream as "logistics found nothing wrong". The one-line gatherer change is
+noted at the `case LOGISTICS` branch in `MeasurementRunner`.
+
+Held back because it invalidates the logistics cache and forces configuration 2
+to be re-measured for a change that is not the root cause. Sequenced third.
+
+**Worth noting about the tool instruction.** A probe of `logistics-v3` on F03 was
+run to test the "reviewer refuses without its tool" theory. It cost zero model
+requests, because the gate short-circuited before logistics was reached — which
+is how the real cause was found. The theory remains untested, and is recorded
+here as untested rather than as a finding.
+
+---
+
 # What to take into an interview
 
-Two of these, because they show different things:
+Three of these, because they show different things:
+
+**The gate that hid four reviewers** — the strongest one, and the only one where
+a measurement did the finding. The architecture scored *worse* than its own
+baseline, the first plausible explanation was wrong, and the real cause was a
+conditionally-mandatory document modelled as unconditionally mandatory. It has
+everything worth demonstrating: a negative result reported rather than buried, a
+wrong hypothesis discarded on evidence, a defect in the data rather than in the
+model, and a fail-dangerous design that turned one false positive into a missed
+defect. It also has a cost — the fix forces a full re-measurement — which is why
+the order of the next three changes is written down.
 
 **The two-JdbcTemplate bug** — debugging under a misleading symptom. Nothing
 threw. A test asking for the table list got 4 instead of 11, because a read-only
@@ -320,4 +473,4 @@ role changes what `information_schema` reports, and the query succeeded.
 than luck. `Optional<Boolean>` instead of `boolean` turns "we assumed valid" into
 "we do not know, ask a human".
 
-The performance story is in the other document and is the stronger one.
+The performance story is in the other document and is also strong.

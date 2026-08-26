@@ -8,7 +8,18 @@ application pack independently. This runs those five reviews in one pass,
 reports where they **contradict each other**, and has an adversarial verifier
 try to refute every serious finding before it reaches a human.
 
-**Status: step 0.** Skeleton and stack verification only.
+**Status: built and being measured.** 64 main classes, 20 test classes, 172
+tests, 14 fixtures. The graph, the five reviewers, the adversarial verifier, the
+conflict detector, the grounding check and the MCP tool server all run. What is
+still in progress is the *measurement* — see below, and
+[`measurements/RESULTS.md`](measurements/RESULTS.md) for whatever has been
+recorded so far.
+
+Measuring is slower than building here, and deliberately so: the free tier
+allows 20 model requests per day per model, one configuration over seven
+fixtures costs 35, and a configuration measured over a different fixture set
+than the one it is compared against is not a comparison. So the numbers arrive a
+day at a time.
 
 ---
 
@@ -37,17 +48,44 @@ anchoring — and that claim gets measured, not asserted.
 
 ## The claim this project has to earn
 
-Four configurations, same fixtures:
+Three configurations over the same seven fixtures. Two are measured:
 
 ```
-                                    recall   false-positive
-single agent, all five dimensions      ?          ?
-five agents, no verifier               ?          ?
-five agents + verifier                 ?          ?
-five agents + verifier + conflicts     ?          ?
+                                fixtures   recall         false positives   routing
+1  single agent, all five areas     7      1.00  (5/5)          1             n/a
+2  gate + four agents               7      0.80  (4/5)          2            1.0000
+3  gate + four agents + verifier    -         -                 -              -
 ```
 
-Until those numbers exist, "multi-agent is better" is an opinion.
+**The multi-agent configuration currently loses on both numbers.** That is the
+result, and it is reported rather than tuned away — see
+[`measurements/RESULTS.md`](measurements/RESULTS.md) for the raw per-fixture data.
+
+It is also not the conclusion it looks like. Routing accuracy is **1.0000** —
+every finding made reached the correct reviewer — so nothing was misrouted. The
+whole gap traces to one row of reference data:
+
+`TIMBER_CHAIN_OF_CUSTODY` is stored as `mandatory = true` for all building
+materials, with its real condition — *"Timber and timber-derived only"* — sitting
+in a free-text `note`. `required_document` has no `applies_when` column, though
+`compliance_rule` does. So the completeness gate correctly reported an
+incorrect rulebook, declared a pack of steel screws incomplete for want of a
+timber certificate, and **short-circuited the four substantive reviewers** — which
+is why the seeded ASN defect on that fixture could not be found by anyone.
+
+One data-modelling error, both halves of the score. The single-agent baseline has
+no gate, so it cannot short-circuit, and it caught the defect.
+
+Full diagnosis, including the first hypothesis that turned out to be wrong, is in
+[`docs/engineering-log.md`](docs/engineering-log.md) §6. The fix is sequenced
+there rather than applied, because it invalidates the reference-data cache for
+both configurations and costs a full day of free-tier quota to re-measure — and
+changing two things before one measurement is how a number stops having a cause.
+
+**What is worth taking from this so far:** the measurement did its job. It was
+built to test "does specialisation help", returned "no", and the "no" turned out
+to be a defect in the retailer's rulebook plus a fail-dangerous gate — neither of
+which would have been found by demonstrating the happy path.
 
 ---
 
@@ -122,6 +160,35 @@ files natively, so that line in `application.yml` is what makes this work.
 
 Proves Spring Boot 4.1 starts with Spring AI 2.0, the Gemini key works, and
 structured output binds a JSON response to a Java record.
+
+### The measurement
+
+```bash
+# one configuration at a time - the daily quota is smaller than a full run
+./mvnw spring-boot:run -Dspring-boot.run.profiles=measure \
+  -Dspring-boot.run.jvmArguments="-Dmeasure.configs=2"
+```
+
+It prints its own cost estimate before spending anything, writes
+`measurements/config-N.json` the moment each configuration finishes, and
+regenerates `measurements/RESULTS.md` from those files — so a run that only
+completes one configuration still produces a report containing the others from
+the days they were measured on.
+
+**Every successful model call is cached in Postgres**, keyed on
+`(area, prompt version, model, rendered prompt)`. A configuration that ran out of
+quota halfway through resumes the next day and pays only for what it never
+reached. Re-running configuration 2 over seven fixtures after three were already
+done cost 20 requests, not 35.
+
+Two things follow from that, and both are load-bearing:
+
+- **A configuration must be re-run over the *whole* fixture set**, not just the
+  fixtures it is missing, because `config-N.json` is rewritten rather than
+  appended to. The cache makes that free for the parts already done.
+- **`config-N.json` is only written on success.** A run that dies on the sixth
+  fixture leaves the previous, smaller result intact rather than replacing it
+  with a partial one.
 
 ---
 
