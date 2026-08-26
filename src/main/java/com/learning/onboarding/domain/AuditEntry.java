@@ -41,6 +41,11 @@ public record AuditEntry(
         String modelName,
         String promptText,
         String responseText,
+        // Null, not zero, when the provider reported nothing - a cached reply
+        // has no usage by definition, and a zero would understate a run's cost
+        // while looking like a measurement.
+        Integer promptTokens,
+        Integer completionTokens,
         long latencyMs,
         Outcome outcome,
         String failureDetail,
@@ -73,16 +78,29 @@ public record AuditEntry(
     public static AuditEntry ok(UUID callId, String applicationId, String nodeName,
                                 String promptVersion, String modelName,
                                 String promptText, String responseText,
+                                Integer promptTokens, Integer completionTokens,
                                 long latencyMs, Instant startedAt) {
         return new AuditEntry(callId, applicationId, nodeName, promptVersion, modelName,
-                promptText, responseText, latencyMs, Outcome.OK, null, startedAt);
+                promptText, responseText, promptTokens, completionTokens,
+                latencyMs, Outcome.OK, null, startedAt);
+    }
+
+    /** A call that produced no usage - served from cache, or a provider that omits it. */
+    public static AuditEntry ok(UUID callId, String applicationId, String nodeName,
+                                String promptVersion, String modelName,
+                                String promptText, String responseText,
+                                long latencyMs, Instant startedAt) {
+        return ok(callId, applicationId, nodeName, promptVersion, modelName,
+                promptText, responseText, null, null, latencyMs, startedAt);
     }
 
     public static AuditEntry failed(UUID callId, String applicationId, String nodeName,
                                     String promptVersion, String modelName,
                                     String promptText, long latencyMs,
                                     Outcome outcome, String detail, Instant startedAt) {
+        // A failed call still consumed quota, but the provider returns no usage
+        // with an error, so there is nothing honest to record here.
         return new AuditEntry(callId, applicationId, nodeName, promptVersion, modelName,
-                promptText, null, latencyMs, outcome, detail, startedAt);
+                promptText, null, null, null, latencyMs, outcome, detail, startedAt);
     }
 }

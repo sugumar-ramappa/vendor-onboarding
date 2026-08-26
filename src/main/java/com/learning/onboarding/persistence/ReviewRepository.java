@@ -174,12 +174,14 @@ public class ReviewRepository {
         jdbc.batchUpdate("""
                 INSERT INTO audit_entry (call_id, application_id, node_name, prompt_version,
                                          model_name, prompt_text, response_text,
+                                         prompt_tokens, completion_tokens,
                                          latency_ms, outcome, failure_detail, started_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 entries.stream().map(e -> new Object[]{
                         e.callId(), e.applicationId(), e.nodeName(), e.promptVersion(),
                         e.modelName(), e.promptText(), e.responseText(),
+                        e.promptTokens(), e.completionTokens(),
                         e.latencyMs(), e.outcome().name(), e.failureDetail(),
                         Timestamp.from(e.startedAt())
                 }).toList());

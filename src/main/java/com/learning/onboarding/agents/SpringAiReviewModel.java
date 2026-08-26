@@ -77,19 +77,28 @@ public class SpringAiReviewModel implements ReviewModel {
     }
 
     @Override
-    public List<AgentFinding> review(String systemPrompt, String userPrompt) {
+    public ModelReply review(String systemPrompt, String userPrompt) {
         RuntimeException last = null;
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                ReviewOutput output = chat.prompt()
+                // responseEntity, not entity. Both return the parsed object;
+                // only this one also hands back the ChatResponse, which is where
+                // the provider's usage block lives. Asking for the entity alone
+                // discarded the token counts before anything could record them -
+                // which is why audit_entry.prompt_tokens had been null since the
+                // first migration.
+                var response = chat.prompt()
                         .system(systemPrompt)
                         .user(userPrompt)
                         .toolCallbacks(tools)     // empty array when disabled
                         .call()
-                        .entity(ReviewOutput.class);
+                        .responseEntity(ReviewOutput.class);
 
-                return output == null ? List.of() : output.findings();
+                ReviewOutput output = response.entity();
+                return new ModelReply(
+                        output == null ? List.of() : output.findings(),
+                        usageOf(response.response()));
 
             } catch (RuntimeException e) {
                 last = e;
@@ -137,6 +146,26 @@ public class SpringAiReviewModel implements ReviewModel {
      * burns wall clock to fail again. Same distinction the retrieval project
      * needed, and for the same reason.
      */
+    /**
+     * Pull the provider's own token counts out of a response.
+     *
+     * <p>Defensive at every step, deliberately: usage is optional in the Spring
+     * AI contract, providers differ on whether they populate it, and a null here
+     * must degrade to "not reported" rather than fail a review that already
+     * succeeded. Instrumentation that can break the thing it measures is worse
+     * than no instrumentation.
+     */
+    private static TokenUsage usageOf(org.springframework.ai.chat.model.ChatResponse response) {
+        if (response == null || response.getMetadata() == null) {
+            return TokenUsage.unknown();
+        }
+        var usage = response.getMetadata().getUsage();
+        if (usage == null) {
+            return TokenUsage.unknown();
+        }
+        return new TokenUsage(usage.getPromptTokens(), usage.getCompletionTokens());
+    }
+
     private static boolean isRetryable(RuntimeException e) {
         String text = describe(e).toLowerCase();
 

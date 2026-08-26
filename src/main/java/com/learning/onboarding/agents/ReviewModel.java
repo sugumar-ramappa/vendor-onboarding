@@ -25,7 +25,7 @@ public interface ReviewModel {
      * @throws ReviewModelException if the model could not be reached, refused,
      *         or returned something that would not bind
      */
-    List<AgentFinding> review(String systemPrompt, String userPrompt);
+    ModelReply review(String systemPrompt, String userPrompt);
 
     /** Which model answered. Recorded against every finding. */
     String modelName();

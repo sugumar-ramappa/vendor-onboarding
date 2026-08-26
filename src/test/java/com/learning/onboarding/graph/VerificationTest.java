@@ -228,8 +228,8 @@ class VerificationTest {
         return new ReviewerAgent(ReviewArea.COMPLETENESS, "completeness-v2", prompts,
                 new ReviewModel() {
                     @Override
-                    public List<AgentFinding> review(String system, String user) {
-                        return List.of();
+                    public ModelReply review(String system, String user) {
+                        return ModelReply.of(List.of());
                     }
 
                     @Override
@@ -254,8 +254,8 @@ class VerificationTest {
     private static ReviewModel modelReturning(AgentFinding... findings) {
         return new ReviewModel() {
             @Override
-            public List<AgentFinding> review(String system, String user) {
-                return List.of(findings);
+            public ModelReply review(String system, String user) {
+                return ModelReply.of(List.of(findings));
             }
 
             @Override

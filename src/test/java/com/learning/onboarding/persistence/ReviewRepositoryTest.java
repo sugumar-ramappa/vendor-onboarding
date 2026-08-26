@@ -90,6 +90,10 @@ class ReviewRepositoryTest {
                 area.name().toLowerCase() + "-v1", "gemini-3.6-flash",
                 "SYSTEM PROMPT\n\n<untrusted>vendor text</untrusted>",
                 outcome == AuditEntry.Outcome.OK ? "[MAJOR] something" : null,
+                // Token counts: present on a successful call, absent on a failure -
+                // the provider returns no usage block with an error.
+                outcome == AuditEntry.Outcome.OK ? 1500 : null,
+                outcome == AuditEntry.Outcome.OK ? 220 : null,
                 1234, outcome,
                 outcome == AuditEntry.Outcome.OK ? null : "rate limited",
                 Instant.now());

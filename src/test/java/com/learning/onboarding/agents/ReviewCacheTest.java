@@ -55,11 +55,11 @@ class ReviewCacheTest {
         }
 
         @Override
-        public List<AgentFinding> review(String system, String user) {
+        public ModelReply review(String system, String user) {
             calls.incrementAndGet();
-            return List.of(new AgentFinding(Severity.MAJOR, "a problem",
+            return ModelReply.of(List.of(new AgentFinding(Severity.MAJOR, "a problem",
                     List.of(new Evidence("cert.pdf", 1, "Scope: hand tools")),
-                    CheckType.SEMANTIC, 0.8, null));
+                    CheckType.SEMANTIC, 0.8, null)));
         }
 
         @Override
@@ -171,7 +171,7 @@ class ReviewCacheTest {
         var cache = new MapCache();
         ReviewModel failing = new ReviewModel() {
             @Override
-            public List<AgentFinding> review(String system, String user) {
+            public ModelReply review(String system, String user) {
                 throw new ReviewModelException("rate limited", null);
             }
 

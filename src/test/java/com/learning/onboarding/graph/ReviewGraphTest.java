@@ -57,8 +57,8 @@ class ReviewGraphTest {
     private static ReviewModel modelReturning(String label) {
         return new ReviewModel() {
             @Override
-            public List<AgentFinding> review(String system, String user) {
-                return List.of(finding("finding from " + label));
+            public ModelReply review(String system, String user) {
+                return ModelReply.of(List.of(finding("finding from " + label)));
             }
 
             @Override
@@ -130,10 +130,10 @@ class ReviewGraphTest {
         // everything", which is the same as having no gate at all.
         ReviewModel minorOnly = new ReviewModel() {
             @Override
-            public List<AgentFinding> review(String system, String user) {
-                return List.of(new AgentFinding(Severity.MINOR, "a documentation nit",
+            public ModelReply review(String system, String user) {
+                return ModelReply.of(List.of(new AgentFinding(Severity.MINOR, "a documentation nit",
                         List.of(new Evidence("cert.pdf", 1, "Scope: hand tools")),
-                        CheckType.SEMANTIC, 0.8, null));
+                        CheckType.SEMANTIC, 0.8, null)));
             }
 
             @Override
@@ -180,7 +180,7 @@ class ReviewGraphTest {
 
         ReviewModel slow = new ReviewModel() {
             @Override
-            public List<AgentFinding> review(String system, String user) {
+            public ModelReply review(String system, String user) {
                 peak.accumulateAndGet(concurrent.incrementAndGet(), Math::max);
                 try {
                     Thread.sleep(120);
@@ -189,7 +189,7 @@ class ReviewGraphTest {
                 } finally {
                     concurrent.decrementAndGet();
                 }
-                return List.of(finding("slow"));
+                return ModelReply.of(List.of(finding("slow")));
             }
 
             @Override
@@ -216,11 +216,11 @@ class ReviewGraphTest {
     void oneFailureDoesNotAbortTheRun() throws Exception {
         ReviewModel failsForCompliance = new ReviewModel() {
             @Override
-            public List<AgentFinding> review(String system, String user) {
+            public ModelReply review(String system, String user) {
                 if (system.contains("compliance reviewer")) {
                     throw new ReviewModel.ReviewModelException("rate limited", null);
                 }
-                return List.of(finding("ok"));
+                return ModelReply.of(List.of(finding("ok")));
             }
 
             @Override
@@ -241,7 +241,7 @@ class ReviewGraphTest {
     void failureIsDistinguishableFromEmpty() throws Exception {
         ReviewModel alwaysFails = new ReviewModel() {
             @Override
-            public List<AgentFinding> review(String system, String user) {
+            public ModelReply review(String system, String user) {
                 throw new ReviewModel.ReviewModelException("model unavailable", null);
             }
 
@@ -255,8 +255,8 @@ class ReviewGraphTest {
 
         ReviewModel findsNothing = new ReviewModel() {
             @Override
-            public List<AgentFinding> review(String system, String user) {
-                return List.of();
+            public ModelReply review(String system, String user) {
+                return ModelReply.of(List.of());
             }
 
             @Override
@@ -284,9 +284,9 @@ class ReviewGraphTest {
 
         ReviewModel recording = new ReviewModel() {
             @Override
-            public List<AgentFinding> review(String system, String user) {
+            public ModelReply review(String system, String user) {
                 systemPrompts.add(system);
-                return List.of();
+                return ModelReply.of(List.of());
             }
 
             @Override
@@ -311,14 +311,14 @@ class ReviewGraphTest {
     private static ReviewModel gateBlocks() {
         return new ReviewModel() {
             @Override
-            public List<AgentFinding> review(String system, String user) {
+            public ModelReply review(String system, String user) {
                 if (system.contains("completeness")) {
-                    return List.of(new AgentFinding(Severity.BLOCKING,
+                    return ModelReply.of(List.of(new AgentFinding(Severity.BLOCKING,
                             "no public liability certificate in the pack",
                             List.of(new Evidence("cert.pdf", 1, "Scope: hand tools")),
-                            CheckType.DETERMINISTIC, 1.0, null));
+                            CheckType.DETERMINISTIC, 1.0, null)));
                 }
-                return List.of(finding("should never run"));
+                return ModelReply.of(List.of(finding("should never run")));
             }
 
             @Override

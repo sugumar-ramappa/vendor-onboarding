@@ -80,6 +80,17 @@ safe patch bump. A Spring AI *minor* upgrade needs that rechecked.
 
 ## Running it
 
+> **The database is shared with a sibling project.** `vendor_onboarding` lives inside
+> the Postgres server run by `hybrid-rag-service`'s `ragdb` container, on port 5432 —
+> that project claimed the port first, and this one is configured for `localhost:5432`,
+> so it connected to the same server and created a database there.
+>
+> **`docker rm ragdb` or `docker stop ragdb` therefore breaks this project**, and
+> recreating that container destroys the measurement cache. Nothing in the RAG project
+> suggests that, which is exactly why it is written here. Separate them onto different
+> ports once the measurement is finished.
+
+
 ### Prerequisites
 
 **Java 21 only.** Maven is not installed - `./mvnw` fetches it into `~/.m2`.

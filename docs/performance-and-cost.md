@@ -86,7 +86,7 @@ reproducible, which is what allows caching them at all.
 
 # 3. What has to happen before anything is optimised
 
-**Token spend is currently unmeasured.** Latency was observed from log
+**Token spend was unmeasured until 26 Aug 2026.** ~~Now instrumented — see below.~~ Latency was observed from log
 timestamps; nothing records prompt tokens, completion tokens, or cost per review.
 
 That is the first task, not the last. Optimising an unmeasured cost is guesswork,
@@ -103,6 +103,54 @@ The questions instrumentation has to answer:
 - how much of the prompt is documents, and how much is instructions?
 - what does one application cost end to end?
 - how much of a measurement run is re-asking questions already answered?
+
+
+---
+
+# 3a. Instrumented — 26 Aug 2026
+
+This section said token spend was unmeasured and called it "the first task, not
+the last". It now is.
+
+**What was actually wrong.** The `audit_entry` table had carried
+`prompt_tokens` and `completion_tokens` since `V1__schema.sql`. Nothing ever
+wrote to them, for two reasons that had to be fixed together:
+
+- `AuditEntry` had no fields for them, so there was nowhere to put them
+- the model call used `.entity(ReviewOutput.class)`, which returns the parsed
+  object and **discards the `ChatResponse`** - and the usage block lives on the
+  response
+
+`.responseEntity(ReviewOutput.class)` returns both. One method change is the
+whole of the capture.
+
+**Where the counts travel.** `review()` now returns `ModelReply(findings,
+usage)` rather than a bare list. The obvious alternative - a `lastUsage()`
+accessor on the model - is wrong here for a specific reason: **the reviewers run
+concurrently and share one model instance**, so a mutable "last call" field
+would be read by whichever reviewer asked next rather than the one that made the
+call. Returning both together makes that race impossible to write.
+
+**Null, never zero.** A cache hit makes no call and so has no usage; a failed
+call gets no usage block from the provider. Both record `null`. Zero is a
+measurement and null is an admission, and the difference matters when the
+question is what a run cost. `TokenUsage.totalTokens()` returns null rather than
+0 for the same reason - summing ten calls where three reported nothing must not
+look like a run that was 30% cheaper.
+
+**Reported, never estimated.** Both numbers come from the provider's own usage
+block. A count computed client-side is a guess with a decimal point on it:
+tokenisation is model-specific, the framework rewrites the prompt before sending
+it, and any local approximation drifts from what is actually billed.
+
+The questions this can now answer - which were listed below as open - are
+answerable as soon as the next measurement run completes:
+
+- which reviewer is the most expensive, and is it the one doing the most work?
+- how much of the prompt is documents, and how much is instructions?
+- what does one application cost end to end?
+
+8 tests cover the accounting, including that "not reported" never becomes zero.
 
 ---
 

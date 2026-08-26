@@ -62,13 +62,13 @@ class ReviewerAgentTest {
         RuntimeException toThrow;
 
         @Override
-        public List<AgentFinding> review(String system, String user) {
+        public ModelReply review(String system, String user) {
             this.systemPrompt = system;
             this.userPrompt = user;
             if (toThrow != null) {
                 throw toThrow;
             }
-            return toReturn;
+            return ModelReply.of(toReturn);
         }
 
         @Override

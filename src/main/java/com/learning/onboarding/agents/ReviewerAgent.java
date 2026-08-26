@@ -132,13 +132,16 @@ public class ReviewerAgent {
         if (hit.isPresent()) {
             log.info("{} served {} from cache (original call took {}ms)",
                     area, context.applicationId(), hit.get().originalLatencyMs());
+            // A cache hit costs nothing, so there is no usage to record. That is
+            // why the columns are nullable: null means "no call was made", which
+            // is different from "a call reported zero".
             return outcome(hit.get().findings(), callId, context, fullPrompt,
-                    hit.get().originalLatencyMs(), startedAt);
+                    hit.get().originalLatencyMs(), startedAt, TokenUsage.unknown());
         }
 
-        List<AgentFinding> proposed;
+        ModelReply reply;
         try {
-            proposed = model.review(systemPrompt, userPrompt);
+            reply = model.review(systemPrompt, userPrompt);
         } catch (ReviewModel.ReviewModelException e) {
             long elapsed = System.currentTimeMillis() - start;
             log.warn("{} failed for {} after {}ms: {}",
@@ -150,22 +153,32 @@ public class ReviewerAgent {
                     classify(e), e.getMessage(), startedAt));
         }
 
+        List<AgentFinding> proposed = reply.findings();
         long elapsed = System.currentTimeMillis() - start;
-        log.info("{} reviewed {} in {}ms, {} finding(s), prompt {}",
-                area, context.applicationId(), elapsed, proposed.size(), promptVersion);
+
+        // Tokens logged beside latency, because they are the two halves of what a
+        // call costs and reporting one without the other is how "it feels faster"
+        // gets mistaken for a result.
+        log.info("{} reviewed {} in {}ms, {} finding(s), prompt {}, tokens {}",
+                area, context.applicationId(), elapsed, proposed.size(), promptVersion,
+                reply.usage().isKnown()
+                        ? "%s in / %s out".formatted(reply.usage().promptTokens(),
+                                                     reply.usage().completionTokens())
+                        : "not reported");
 
         // Only successful calls are cached. Caching a failure would turn a
         // transient rate limit into a permanent one for this application.
         cache.put(cacheKey, area.name(), promptVersion, model.modelName(),
                 proposed, elapsed);
 
-        return outcome(proposed, callId, context, fullPrompt, elapsed, startedAt);
+        return outcome(proposed, callId, context, fullPrompt, elapsed, startedAt,
+                reply.usage());
     }
 
     /** Wraps the model's findings with the things the model may not assert. */
     private ReviewOutcome outcome(List<AgentFinding> proposed, UUID callId,
                                   ReviewContext context, String fullPrompt,
-                                  long elapsed, Instant startedAt) {
+                                  long elapsed, Instant startedAt, TokenUsage usage) {
         FindingSource source = new FindingSource(
                 callId, promptVersion, model.modelName(), Instant.now());
 
@@ -183,7 +196,8 @@ public class ReviewerAgent {
         return new ReviewOutcome(findings, AuditEntry.ok(
                 callId, context.applicationId(), area.name().toLowerCase(),
                 promptVersion, model.modelName(), fullPrompt,
-                summarise(findings), elapsed, startedAt));
+                summarise(findings), usage.promptTokens(), usage.completionTokens(),
+                elapsed, startedAt));
     }
 
     /**
