@@ -8,7 +8,7 @@ application pack independently. This runs those five reviews in one pass,
 reports where they **contradict each other**, and has an adversarial verifier
 try to refute every serious finding before it reaches a human.
 
-**Status: built and measured.** 64 main classes, 20 test classes, 176 tests, 20
+**Status: built and measured.** 64 main classes, 21 test classes, 186 tests, 20
 fixtures carrying 26 planted defects. The graph, the five reviewers, the
 adversarial verifier, the conflict detector, the grounding check and the MCP tool
 server all run.
@@ -62,8 +62,28 @@ one model. Measured 2026-08-28 on `openai/gpt-oss-120b` via Groq:
 3  gate + four agents + verifier    5      0.93  (13/14)      30            -          1.0000    180 s
 ```
 
+**The sample, stated plainly.** Five fixtures: F17, F18 and F20 carry the 14
+planted defects (4, 5 and 5); F15 and F16 are clean. So recall is over three
+fixtures, and **every false-positive count is over two clean packs** — 31 is
+about fifteen confirmations per pack, and the single agent's 6 is three
+fabricated blocking findings per pack. Small, and the conclusions are stated
+against that.
+
 Configuration 3 predates the actionable/confirmatory split and has not been
 re-scored under it, so its second column is left blank rather than assumed.
+
+**The median column is the weakest number here, and the harness has just been
+fixed so it stops being.** These seconds were carried in prose from the original
+uncached run; the stored files record 8 ms and 22 ms for configurations 1 and 2,
+because a stopwatch around a fully cached run measures the cache.
+
+The durations were never lost — a cache hit returns the original call's
+`latencyMs` in its audit entry, so the run still knows what the work cost. What
+was missing was anything reading them back. `medianCriticalPathMs` now does:
+gate plus the **slowest** concurrent reviewer, rebuilt from the audit records,
+which survives a cached re-run. Regenerating all three configurations from cache
+will fill it in at no quota cost. Until then this column stays as-is and is
+marked approximate.
 
 Full data in
 [`measurements/openai-gpt-oss-120b/RESULTS.md`](measurements/openai-gpt-oss-120b/RESULTS.md).
@@ -102,8 +122,12 @@ channel it has. That is the same shape as the gate bug one level up, where a
 skipped review was reported indistinguishably from a clean one, and it is the
 thing to fix next.
 
-**The measured cost is latency:** 88 seconds against 28, for the same pack. Three
-times slower to find four more defects out of fourteen.
+**The cost is latency:** roughly 88 seconds against 28 for the same pack — three
+times slower to find four more defects out of fourteen. Roughly, because of the
+caveat above: those two figures come from the original uncached run and are not
+reproducible from the stored files. The direction is not in doubt — four
+concurrent reviewers plus a gate cannot beat one call — but the ratio needs one
+clean re-measurement before it is quoted as a result.
 
 **The verifier does not currently justify its cost.** Across five fixtures it
 removed exactly two findings — one false positive and one genuine defect — while

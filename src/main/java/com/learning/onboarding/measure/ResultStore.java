@@ -8,6 +8,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.ToLongFunction;
 
 /**
  * Writes each configuration's outcome to a file the moment it completes.
@@ -251,8 +252,8 @@ public final class ResultStore {
             if (files.isEmpty()) {
                 sb.append("_No configurations recorded yet._\n");
             } else {
-                sb.append("| # | configuration | fixtures | recall | caught/seeded | FP (all) | FP (actionable) | confirmations | routing |\n")
-                  .append("|---|---|---:|---:|---:|---:|---:|---:|---:|\n");
+                sb.append("| # | configuration | fixtures | recall | caught/seeded | FP (all) | FP (actionable) | confirmations | routing | median latency |\n")
+                  .append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|\n");
                 var fixtureCounts = new java.util.LinkedHashSet<String>();
                 for (Path f : files) {
                     String json = Files.readString(f);
@@ -379,14 +380,15 @@ public final class ResultStore {
                           "conflicts": %d,
                           "discardedUngrounded": %d,
                           "reachedCompletion": %b,
-                          "wallClockMs": %d
+                          "wallClockMs": %d,
+                          "criticalPathMs": %d
                         }%s"""
                     .formatted(o.fixture().id(), o.fixture().clean(),
                             o.fixture().expected().size(), o.caught().size(),
                             o.missed().size(), o.routed().size(),
                             o.unexpected().size(), o.conflicts(),
                             o.discardedUngrounded(), o.complete(),
-                            o.wallClockMs(),
+                            o.wallClockMs(), o.criticalPathMs(),
                             i < outcomes.size() - 1 ? ",\n" : "\n"));
         }
 
@@ -407,7 +409,9 @@ public final class ResultStore {
                   "routingMeaningful": %b,
                   "routingAccuracy": %.4f,
                   "medianWallClockMs": %d,
-                  "wallClockCaveat": "Median wall clock per fixture, NOT the sum of model calls - configuration 2 runs four reviewers concurrently, so cost and latency do not scale together. Comparable across configurations ONLY within a single uncached, unthrottled run: a cached call returns in about a millisecond and a rate-limited one spends 20 seconds in backoff, and either dominates this number completely.",
+                  "wallClockCaveat": "Median wall clock per fixture, NOT the sum of model calls - configuration 2 runs four reviewers concurrently, so cost and latency do not scale together. Comparable across configurations ONLY within a single uncached, unthrottled run: a cached call returns in about a millisecond and a rate-limited one spends 20 seconds in backoff, and either dominates this number completely. When this number is implausibly small the run was served from cache - read medianCriticalPathMs instead.",
+                  "medianCriticalPathMs": %d,
+                  "criticalPathNote": "The same journey rebuilt from the per-call audit records: gate plus the SLOWEST concurrent reviewer, not their sum. Survives a cached re-run, because a cache hit reports the original call's duration rather than the lookup - which is why the 2026-08-28 timings were recoverable at all after configurations 1 and 2 were regenerated from cache and their wall clock collapsed to 8ms and 22ms. EXCLUDES THE VERIFIER, which writes no audit entry, so configuration 3's figure is a floor and not a total.",
                   "perFixture": [
                 %s  ]
                 }
@@ -425,6 +429,7 @@ public final class ResultStore {
                         // minute in backoff and drags a mean far past anything
                         // the system actually does.
                         medianWallClockMs(outcomes),
+                        median(outcomes, MeasurementHarness.FixtureOutcome::criticalPathMs),
                         perFixture);
     }
 
@@ -437,13 +442,16 @@ public final class ResultStore {
      * the system actually does, while the median still reports a typical review.
      */
     private static long medianWallClockMs(List<MeasurementHarness.FixtureOutcome> outcomes) {
+        return median(outcomes, MeasurementHarness.FixtureOutcome::wallClockMs);
+    }
+
+    /** Median of any per-fixture timing, for the reason above. */
+    private static long median(List<MeasurementHarness.FixtureOutcome> outcomes,
+                               ToLongFunction<MeasurementHarness.FixtureOutcome> of) {
         if (outcomes.isEmpty()) {
             return 0;
         }
-        long[] sorted = outcomes.stream()
-                .mapToLong(MeasurementHarness.FixtureOutcome::wallClockMs)
-                .sorted()
-                .toArray();
+        long[] sorted = outcomes.stream().mapToLong(of).sorted().toArray();
         int mid = sorted.length / 2;
         return sorted.length % 2 == 1
                 ? sorted[mid]
@@ -460,7 +468,10 @@ public final class ResultStore {
         // written before the split looks like.
         String actionable = field(json, "actionableFalsePositives");
         String confirmatory = field(json, "confirmatoryFindings");
-        return "| %s | %s | %s | %s | %s/%s | %s | %s | %s | %s |".formatted(
+        // Same treatment for latency: a file written before criticalPathMs
+        // existed renders "-", never a zero that would read as instantaneous.
+        String criticalPath = field(json, "medianCriticalPathMs");
+        return "| %s | %s | %s | %s | %s/%s | %s | %s | %s | %s | %s |".formatted(
                 field(json, "configuration"), field(json, "label"),
                 field(json, "fixtures"),
                 field(json, "recall"), field(json, "caught"), field(json, "seeded"),
@@ -468,7 +479,17 @@ public final class ResultStore {
                 "?".equals(actionable) ? "-" : actionable,
                 "?".equals(confirmatory) ? "-" : confirmatory,
                 "true".equals(field(json, "routingMeaningful"))
-                        ? field(json, "routingAccuracy") : "n/a");
+                        ? field(json, "routingAccuracy") : "n/a",
+                "?".equals(criticalPath) ? "-" : seconds(criticalPath));
+    }
+
+    /** Milliseconds as seconds, because a review is a seconds-scale thing. */
+    private String seconds(String ms) {
+        try {
+            return "%.0f s".formatted(Long.parseLong(ms) / 1000.0);
+        } catch (NumberFormatException e) {
+            return "-";
+        }
     }
 
     private String field(String json, String name) {

@@ -307,6 +307,7 @@ architecture or a model change with no way to tell.
 | **MCP server publishes no tools** | In-process tool calling works, but the server logs `No tool methods found`. The `ToolCallbackProvider` bean is not reaching the MCP autoconfiguration |
 | **`ReviewOutput` has no channel for "checked, and it is fine"** | The real defect behind the 31 clean-pack findings. A reviewer can only speak through `findings`, so a pass has to be expressed as one. Same shape as the gate bug: "nobody looked" and "looked and found nothing" come out the same pipe. Section 7 |
 | **Configuration 3 not scored under the severity split** | Configurations 1 and 2 report actionable and confirmatory counts; 3 predates the metric and its columns are blank. Cheap now the verifier cache exists |
+| **The latency figures still need backfilling into the result files** | `medianCriticalPathMs` now exists (§8) and survives a cached run, but no result file carries it yet. Regenerate all three configurations from cache — free — and the 28 s / 88 s that currently live only in prose become recorded numbers |
 | **F19 not measured** | The cross-cutting fixture, predicted to make multi-agent **lose**. Deliberately still open — and now the *only* predicted cost left, since the precision cost turned out not to be real. Deferred until configuration 3 is re-scored |
 
 ---
@@ -650,7 +651,11 @@ prompt bugs found.
 # 7. The measurement that finally answered the question
 
 **2026-08-28.** All three configurations, same five dense fixtures, same fourteen
-planted defects, one model.
+planted defects, one model. F17, F18 and F20 carry the defects (4, 5 and 5); F15
+and F16 are clean, so **the false-positive column is a count over two packs**.
+
+The median column is carried from the original uncached run and is the one number
+here without a result file behind it — see §5.
 
 ```
 #  configuration                    recall          false positives   routing   median
@@ -821,6 +826,62 @@ Three tests cover the quarantine path, which previously had none.
 **The shape worth remembering:** the guard was correct and its *reporting* was
 not. Refusing to record a bad number is only half the job; the other half is that
 the report cannot state two things that contradict each other.
+
+---
+
+# 8. The measurement that measured the cache
+
+**2026-08-28, last thing.** Every document quoted the same latency row — 28 s,
+88 s, 180 s — and two of those three numbers were in no result file.
+
+**Symptom.** `config-1.json` recorded `medianWallClockMs: 8`. `config-2.json`
+recorded 22. Eight and twenty-two *milliseconds*, for a review that calls a
+hosted model five times.
+
+**Cause.** Wall clock is a stopwatch around `graph.review(context)`. Both
+configurations had last been regenerated from cache, so the stopwatch timed a
+database lookup. The number was not wrong; it was answering a different question
+from the one the column implied.
+
+**What made it worse than a bad number.** The real figures had been transcribed
+into prose by hand, so every document told a story its own data contradicted, and
+the contradiction was invisible unless you opened the JSON. A measurement that
+lives in a README is not a measurement — nothing re-derives it, nothing tests it,
+and it survives changes that should have invalidated it.
+
+## The durations were never lost
+
+`ReviewerAgent` returns the cache hit's `originalLatencyMs` in its audit entry
+rather than the microseconds the lookup took — deliberately, and commented as
+such: *"kept so a cached run can still report honest timings"*. Every real call's
+duration was still sitting in the run. Nothing read them back.
+
+So the fix is not a re-measurement. It is a reader:
+
+```java
+static long criticalPathMs(List<AuditEntry> gate, List<AuditEntry> reviewers) {
+    return gate.stream().mapToLong(AuditEntry::latencyMs).sum()
+         + reviewers.stream().mapToLong(AuditEntry::latencyMs).max().orElse(0L);
+}
+```
+
+**`max`, not `sum`, is the whole point.** The gate runs to completion before the
+fan-out; the four reviewers then fork onto virtual threads. Summing them would
+report configuration 2 as five times the baseline when it is roughly three — and
+that error flatters the single agent in precisely the comparison this project
+exists to make. `CriticalPathTest` pins it with four reviewers at 20/45/30/25
+seconds behind a 10-second gate: 55 s, not 130 s.
+
+## What it does not cover
+
+`VerifierAgent` writes no `AuditEntry` at all, so configuration 3's challenge
+calls are invisible to this and its figure is a floor rather than a total. That
+is the same blind spot that let the most expensive component run uncached for a
+day: the verifier was built as the interesting idea and instrumented last.
+
+**The shape worth remembering:** the number was already being collected and
+already correct. What was missing was a consumer, and its absence was disguised
+by a second number that looked plausible and measured something else.
 
 ---
 

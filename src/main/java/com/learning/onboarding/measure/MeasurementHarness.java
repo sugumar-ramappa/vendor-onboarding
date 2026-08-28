@@ -3,6 +3,7 @@ package com.learning.onboarding.measure;
 import com.learning.onboarding.agents.ReviewContext;
 import com.learning.onboarding.agents.ReviewOutcome;
 import com.learning.onboarding.agents.ReviewerAgent;
+import com.learning.onboarding.domain.AuditEntry;
 import com.learning.onboarding.domain.ReviewFinding;
 import com.learning.onboarding.domain.Severity;
 import com.learning.onboarding.graph.ReviewGraph;
@@ -81,7 +82,8 @@ public class MeasurementHarness {
             boolean complete = state.allReviewersRan() && state.verifierFailures() == 0;
 
             FixtureOutcome outcome = score(fixture, reported, state.conflicts().size(),
-                    state.discarded().size(), complete, wallClockMs);
+                    state.discarded().size(), complete, wallClockMs,
+                    criticalPathMs(state.gateAudit(), state.reviewerAudit()));
             outcomes.add(outcome);
 
             log.info("{} / {}: {} caught, {} missed, {} unexpected",
@@ -122,7 +124,12 @@ public class MeasurementHarness {
             List<ReviewFinding> reported =
                     outcome.succeeded() ? outcome.findings() : List.of();
 
-            outcomes.add(score(fixture, reported, 0, 0, outcome.succeeded(), wallClockMs));
+            // One call, so the critical path is that call. Taken from the audit
+            // entry rather than the stopwatch for the same reason as the graph
+            // path: on a cached run the stopwatch reports the lookup, and the
+            // audit entry reports what the call originally cost.
+            outcomes.add(score(fixture, reported, 0, 0, outcome.succeeded(), wallClockMs,
+                    outcome.audit().latencyMs()));
 
             log.info("{} / {}: {} finding(s){}", configurationLabel, fixture.id(),
                     reported.size(), outcome.succeeded() ? "" : " - REVIEWER FAILED");
@@ -131,10 +138,51 @@ public class MeasurementHarness {
         return new Result(configurationLabel, outcomes, false);
     }
 
+    /**
+     * Latency along the critical path, rebuilt from the per-call audit records.
+     *
+     * <h2>Why this exists beside wall clock</h2>
+     *
+     * Wall clock is the honest number for a fresh run and a meaningless one for a
+     * cached re-run: the 2026-08-28 configurations 1 and 2 were last regenerated
+     * from cache and recorded 8 ms and 22 ms. The 28 s and 88 s those runs
+     * originally took survived only in prose, which is not a place a measurement
+     * should live.
+     *
+     * <p>They were recoverable because {@code ReviewerAgent} returns the cache
+     * hit's {@code originalLatencyMs} in its audit entry rather than the
+     * microseconds the lookup took. Every real call's duration is therefore still
+     * in the run, whether or not the model was asked again.
+     *
+     * <h2>The path</h2>
+     *
+     * The gate runs to completion before the fan-out, and the four reviewers then
+     * run concurrently on virtual threads. So the reconstruction is
+     * {@code gate + max(reviewers)} - not the sum, which would report
+     * configuration 2 as five times slower than the baseline when it is roughly
+     * three.
+     *
+     * <p><b>What it does not include: the verifier.</b> {@code VerifierAgent}
+     * records no {@link AuditEntry}, so configuration 3's challenge calls are
+     * invisible here and its number is a floor rather than a total. That is the
+     * same blind spot that let the most expensive component go uncached, and it
+     * is recorded rather than papered over.
+     */
+    static long criticalPathMs(List<AuditEntry> gate, List<AuditEntry> reviewers) {
+        long gateMs = gate.stream()
+                .mapToLong(AuditEntry::latencyMs)
+                .sum();
+        long slowestReviewer = reviewers.stream()
+                .mapToLong(AuditEntry::latencyMs)
+                .max()
+                .orElse(0L);
+        return gateMs + slowestReviewer;
+    }
+
     /** Scores one fixture's reported findings against its planted defects. */
     private FixtureOutcome score(Fixture fixture, List<ReviewFinding> reported,
                                  int conflicts, int discarded, boolean complete,
-                                 long wallClockMs) {
+                                 long wallClockMs, long criticalPathMs) {
         List<Fixture.ExpectedDefect> caught = new ArrayList<>();
         List<Fixture.ExpectedDefect> missed = new ArrayList<>();
         List<Fixture.ExpectedDefect> routed = new ArrayList<>();
@@ -155,7 +203,7 @@ public class MeasurementHarness {
                 .toList();
 
         return new FixtureOutcome(fixture, caught, missed, routed, unexpected,
-                conflicts, discarded, complete, wallClockMs);
+                conflicts, discarded, complete, wallClockMs, criticalPathMs);
     }
 
     /** What happened to one fixture. */
@@ -170,9 +218,14 @@ public class MeasurementHarness {
      *
      * <p><b>Only comparable within one uncached, unthrottled run.</b> A cached call
      * returns in about a millisecond and a rate-limited one spends 20 seconds in
-     * backoff, so either will dominate this number completely. It is recorded
-     * always and interpreted only when those two conditions hold - see
-     * {@code cachedCalls} beside it in the results file.
+     * backoff, so either will dominate this number completely. Use
+     * {@code criticalPathMs} for a figure that survives a cached re-run.
+     *
+     * @param criticalPathMs the same journey rebuilt from the audit records:
+     *                       gate plus the slowest concurrent reviewer. Because a
+     *                       cache hit reports the original call's duration, this
+     *                       stays meaningful when {@code wallClockMs} does not.
+     *                       Excludes the verifier, which writes no audit entry.
      */
     public record FixtureOutcome(
             Fixture fixture,
@@ -183,7 +236,8 @@ public class MeasurementHarness {
             int conflicts,
             int discardedUngrounded,
             boolean complete,
-            long wallClockMs
+            long wallClockMs,
+            long criticalPathMs
     ) {}
 
     /**

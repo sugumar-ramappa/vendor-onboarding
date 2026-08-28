@@ -164,6 +164,22 @@ public class ReviewState extends AgentState {
         return join(GATE_AUDIT, AUDIT);
     }
 
+    /**
+     * The gate's call only. Runs <b>before</b> the parallel fan-out.
+     *
+     * <p>Separated from {@link #reviewerAudit()} so latency can be reconstructed
+     * along the critical path rather than by summing calls that overlapped. See
+     * {@code MeasurementHarness.criticalPathMs}.
+     */
+    public List<AuditEntry> gateAudit() {
+        return this.<List<AuditEntry>>value(GATE_AUDIT).orElseGet(List::of);
+    }
+
+    /** The fanned-out reviewers' calls only. These run concurrently. */
+    public List<AuditEntry> reviewerAudit() {
+        return this.<List<AuditEntry>>value(AUDIT).orElseGet(List::of);
+    }
+
     /** Reviewers that could not run. Not the same as reviewers that found nothing. */
     public List<String> failures() {
         return join(GATE_FAILURES, FAILURES);
