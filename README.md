@@ -15,8 +15,9 @@ server all run.
 
 All three configurations are measured over the same dense fixture set —
 [`measurements/openai-gpt-oss-120b/RESULTS.md`](measurements/openai-gpt-oss-120b/RESULTS.md).
-The headline is below and it is not one-sided: **the architecture wins recall and
-loses precision**, and the verifier does not currently pay for itself.
+The headline is below and it is not one-sided: **the architecture wins recall,
+and pays for it in latency** — three times slower for the same pack. The verifier
+does not currently pay for itself.
 
 Measuring was slower than building here, and deliberately so. A configuration
 measured over a different fixture set than the one it is compared against is not
@@ -55,16 +56,19 @@ Three configurations, same five dense fixtures, same fourteen planted defects,
 one model. Measured 2026-08-28 on `openai/gpt-oss-120b` via Groq:
 
 ```
-                                fixtures   recall          false positives   routing   median
-1  single agent, all five areas     5      0.71  (10/14)         6             n/a       28 s
-2  gate + four agents               5      1.00  (14/14)        31          1.0000       88 s
-3  gate + four agents + verifier    5      0.93  (13/14)        30          1.0000      180 s
+                                fixtures   recall          FP (all)  FP (actionable)  routing   median
+1  single agent, all five areas     5      0.71  (10/14)       6            6           n/a       28 s
+2  gate + four agents               5      1.00  (14/14)      31            0          1.0000     88 s
+3  gate + four agents + verifier    5      0.93  (13/14)      30            -          1.0000    180 s
 ```
+
+Configuration 3 predates the actionable/confirmatory split and has not been
+re-scored under it, so its second column is left blank rather than assumed.
 
 Full data in
 [`measurements/openai-gpt-oss-120b/RESULTS.md`](measurements/openai-gpt-oss-120b/RESULTS.md).
 
-**The architecture earns its recall and does not earn its precision.**
+**The architecture earns its recall. What it costs is time, not precision.**
 
 Splitting the work wins decisively on finding defects: 14 of 14 against 10 of 14,
 and on the fixture carrying four separate defects the single agent found two and
@@ -72,11 +76,34 @@ stopped. That is the effect the dense fixtures were built to expose — one call
 asked to check five areas reports the most salient problems and stops, while five
 callers with one job each have no reason to.
 
-It costs precision badly. **Thirty-one false positives against six**, essentially
-all of them on the two clean packs, which drew about fifteen invented findings
-each. Four specialists each looking hard at a clean application will each find
-something to say. On a real onboarding queue that is its own kind of broken, and
-it is the number to fix next.
+**Thirty-one false positives against six** looks like the price, and that is how
+this document read until the findings were opened. Splitting them by severity
+says something else: of the 31, **none** are `MAJOR` or above. All 31 are `INFO`
+entries of the form *"product liability insurance meets the minimum required GBP
+5M"* — the reviewer stating what it checked and that the pack passed.
+
+The single agent's six are the opposite: **all six actionable, four of them
+`BLOCKING`**, and every one fabricated. It asserted that a paintbrush vendor's
+SKUs were hazardous — `hazardous = false` in the fixture — demanded safety data
+sheets for a hazard that does not exist, then multiplied a case weight by a
+quantity that appears nowhere in the pack. Six clean vendors stopped, against
+zero.
+
+So the count is higher and the harm is lower. Both numbers stay in the results
+file, because narrowing a metric after seeing the number it made look bad is the
+move [`PREDICTIONS.md`](measurements/PREDICTIONS.md) exists to prevent — the
+original figure is not replaced, it is decomposed, and the reader can see the
+decomposition was made.
+
+**The real defect this exposes is upstream, and counting differently does not fix
+it.** `ReviewOutput` gives a reviewer nowhere to say *"I checked this and it is
+fine"*, so a pass has to be expressed as a finding. The model is using the only
+channel it has. That is the same shape as the gate bug one level up, where a
+skipped review was reported indistinguishably from a clean one, and it is the
+thing to fix next.
+
+**The measured cost is latency:** 88 seconds against 28, for the same pack. Three
+times slower to find four more defects out of fourteen.
 
 **The verifier does not currently justify its cost.** Across five fixtures it
 removed exactly two findings — one false positive and one genuine defect — while
@@ -94,19 +121,24 @@ and "my reasons were good" is not checkable afterwards.
 |---|---|
 | dense packs: multi-agent wins recall | **held** — 14/14 against 10/14 |
 | F15/F16: the gate no longer blocks on a conditional document | **held** — the reviewers ran at all, which they could not before `applies_when` |
-| F15/F16: "both clean, no findings" | **wrong** — 31 findings between them |
+| F15/F16: "both clean, no findings" | **wrong** — 31 findings between them, though all `INFO` confirmations and none actionable |
 | conflict probe inside F18 | **fired** — one conflict, `MINOR` against `BLOCKING` on `KEL-AER-500` |
 
 The wrong prediction is the useful one. The gate half was right; what was not
 predicted is that once four reviewers actually run on a clean pack they generate
 fifteen findings each. Fixing the short-circuit was the whole focus, and nobody
-asked what happens downstream of fixing it.
+asked what happens downstream of fixing it. The prediction stands as wrong even
+though the findings turned out to be harmless — "no findings" was the forecast,
+and 31 is not zero.
 
 **Still unmeasured:** F19, the cross-cutting fixture, where the defect exists
 only by joining two reviewers' documents — insurance covering Great Britain
 against a delivery list including Belfast. The isolation that prevents anchoring
 also prevents the join, so multi-agent is predicted to **lose** there. It stays
-on the list precisely because it is predicted to be a cost of the architecture.
+on the list precisely because it is predicted to be a cost of the architecture,
+and it is the only fixture that can produce one now that the precision cost has
+turned out not to be real. Deferred until configuration 3 is re-scored under the
+severity split, because that result determines what F19 is being asked to settle.
 
 ### The earlier result this replaces
 

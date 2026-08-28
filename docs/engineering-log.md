@@ -305,9 +305,9 @@ architecture or a model change with no way to tell.
 |---|---|
 | **Review latency** | 105s. Section 1. Blocks step 8 |
 | **MCP server publishes no tools** | In-process tool calling works, but the server logs `No tool methods found`. The `ToolCallbackProvider` bean is not reaching the MCP autoconfiguration |
-| **31 false positives on clean packs** | The headline cost of the architecture, measured 28 Aug. Four reviewers each invent findings on a clean application. Section 7 |
-| **`VerifierAgent` has no cache** | The most expensive call is the only uncached one. The key is harder than a reviewer's because it must cover a set of findings. Section 7 |
-| **F19 not measured** | The cross-cutting fixture, predicted to make multi-agent **lose**. Deliberately still open — it is the prediction that would cost the architecture something |
+| **`ReviewOutput` has no channel for "checked, and it is fine"** | The real defect behind the 31 clean-pack findings. A reviewer can only speak through `findings`, so a pass has to be expressed as one. Same shape as the gate bug: "nobody looked" and "looked and found nothing" come out the same pipe. Section 7 |
+| **Configuration 3 not scored under the severity split** | Configurations 1 and 2 report actionable and confirmatory counts; 3 predates the metric and its columns are blank. Cheap now the verifier cache exists |
+| **F19 not measured** | The cross-cutting fixture, predicted to make multi-agent **lose**. Deliberately still open — and now the *only* predicted cost left, since the precision cost turned out not to be real. Deferred until configuration 3 is re-scored |
 
 ---
 
@@ -667,7 +667,9 @@ what the dense fixtures were built to expose — the shallow set could not have
 shown it, because with one defect per fixture there is nothing to dilute.
 
 Precision: 31 false positives against 6, essentially all on the two clean packs.
-**This was predicted to be zero.** See below.
+**This was predicted to be zero.** See below — and see "the precision cost that
+was not one", because reading the findings rather than counting them reversed the
+conclusion this table supports.
 
 ## The prediction that was wrong, and why it is the useful one
 
@@ -690,6 +692,49 @@ was diagnosed from. The gate was blocking wrongly, so the fix made the gate stop
 blocking wrongly, and the measurement of that fix was "does the gate pass". The
 question never asked was what the newly-unblocked path produces.
 
+## The precision cost that was not one
+
+The 31 were counted before they were read. Reading them says the architecture
+never lost precision at all.
+
+```
+                     FP (all)   MAJOR or above   INFO confirmations
+single agent             6            6                  0
+gate + four agents      31            0                 31
+```
+
+Configuration 2's 31 are entries of the form *"product liability insurance meets
+the minimum required GBP 5M"* and *"case weight of 9.8 kg is below the manual
+handling limit of 25 kg"*. Those are not accusations — they are the reviewer
+stating what it checked and that the pack passed, which is arguably the most
+useful thing it produces. Not one would stop a vendor.
+
+The single agent's 6 are all `MAJOR` or above, four of them `BLOCKING`, and all
+six are fabricated: it declared a paintbrush vendor's SKUs hazardous when the
+fixture says `hazardous = false`, demanded safety data sheets for a hazard that
+does not exist, then multiplied a case weight by a quantity appearing nowhere in
+the pack. Six clean vendors stopped, against none.
+
+**On the honesty of splitting a metric after seeing it.** This is the exact move
+`PREDICTIONS.md` was written to prevent, so the constraint is that nothing is
+replaced. `falsePositives()` still counts every clean-pack finding and still
+reports 31 in the results file; `actionableFalsePositives()` is added beside it,
+and `confirmatoryFindings()` is their difference. The number was decomposed, not
+narrowed, and the reader can see the decomposition and recompute the original.
+
+**What it does not excuse.** The reviewers are still saying something on a pack
+where the correct output is silence, and counting it more kindly does not change
+that. The defect is upstream: `ReviewOutput` gives a reviewer nowhere to say
+*"I checked this and it is fine"*, so a pass has to come out through `findings`
+because that is the only channel there is. The model is using the API it was
+given.
+
+That is the same bug as the gate one level up, where a skipped review was
+reported indistinguishably from a clean one. Twice now, in different components,
+"checked and fine" and "not checked" — or "checked and fine" and "found a
+problem" — have shared an output with no way to tell them apart. **The fix is a
+type change, not a prompt change.**
+
 ## The verifier does not pay for itself
 
 Across five fixtures the verifier discarded exactly two findings: one false
@@ -705,7 +750,7 @@ because it is unflattering to the design.
 small sample, and the verifier is calibrated to refute rather than to rank. It
 says this verifier, on this evidence, does not ship.
 
-## VerifierAgent has no cache
+## VerifierAgent had no cache — fixed the same day
 
 **Symptom.** Re-running configuration 3 to regenerate the report — with every
 reviewer served from cache — still spent five minutes and hit the per-minute
@@ -719,13 +764,35 @@ expensive component — it is multi-turn, it can loop through `gatherMore`, and 
 runs after four reviewers have already produced findings — so it is the one call
 that most wants a cache and is the only one without.
 
-**Not yet fixed**, and the reason is recorded rather than assumed: the verifier's
-cache key is harder than the reviewer's. A reviewer's key is
+**Why it was deferred, and then was not.** The verifier's cache key is harder
+than the reviewer's. A reviewer's key is
 `(area, prompt version, model, rendered prompt)` and is fully determined before
 the call. The verifier's input includes *the findings the reviewers produced*, so
 the key has to cover a set of findings whose order is not guaranteed. Getting
 that wrong caches a verdict against the wrong evidence, which is worse than
-paying twice.
+paying twice — and is silent, because a wrong cache hit looks exactly like a
+cheap correct one.
+
+**The reason for deferring it was wrong, and that is the interesting part.**
+`challenge()` takes **one** finding and renders **one** prompt. There is no set
+and no ordering. The rendered challenge prompt already carries the finding, its
+evidence, any reference data a previous pass fetched, and the whole application —
+so hashing it covers everything that could change the answer, and the key is the
+same shape as the reviewer's: `SHA-256(prompt version, model, rendered prompt)`.
+
+The `gatherMore` loop needed no special case either. A second pass renders the
+same finding *plus* the data the first pass asked for, which is a different
+string and therefore a different key — correctly, because it is a different
+question.
+
+A day was spent not doing this because the input was described in the abstract —
+*"the findings the reviewers produced"* — instead of being read at the call site,
+where it is one finding. The estimate was made against a mental model of the
+code rather than the code.
+
+**Fixed**: `VerifierCache`, `JdbcVerifierCache`, migration `V7__verifier_cache.sql`,
+covered by `VerifierCacheTest`. That unblocks re-running configuration 3, which
+the severity split needs before its columns can be filled in.
 
 ## The guard earned its keep a second time
 
