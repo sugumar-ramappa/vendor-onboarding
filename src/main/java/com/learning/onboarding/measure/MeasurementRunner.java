@@ -323,12 +323,17 @@ public class MeasurementRunner implements CommandLineRunner {
     }
 
     private ReviewerAgent completenessGate() {
-        return reviewer(ReviewArea.COMPLETENESS, "completeness-v2");
+        return reviewer(ReviewArea.COMPLETENESS, "completeness-v3");
     }
 
     private List<ReviewerAgent> fourReviewers() {
         return List.of(
-                reviewer(ReviewArea.COMPLIANCE, "compliance-v2"),
+                // All four on v3 now, not one at a time. Yesterday logistics-v3
+                // was written and the other three deferred with a note saying
+                // "has not failed yet is not the same as is correct" - and
+                // compliance failed the next day with the identical
+                // tool_choice error, costing the run it was meant to save.
+                reviewer(ReviewArea.COMPLIANCE, "compliance-v3"),
                 reviewer(ReviewArea.QUALITY, "quality-v2"),
                 // v3, not v2. v2 instructs the model to fetch its rulebook from
                 // tools, and the measurement disables tools because a tool call
@@ -342,7 +347,7 @@ public class MeasurementRunner implements CommandLineRunner {
                 // See docs/engineering-log.md, "the prompt that asked for a tool
                 // that was not there".
                 reviewer(ReviewArea.LOGISTICS, "logistics-v3"),
-                reviewer(ReviewArea.FINANCE, "finance-v2"));
+                reviewer(ReviewArea.FINANCE, "finance-v3"));
     }
 
     private ReviewerAgent reviewer(ReviewArea area, String promptVersion) {

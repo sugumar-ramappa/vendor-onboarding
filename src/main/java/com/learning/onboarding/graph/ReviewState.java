@@ -267,4 +267,32 @@ public class ReviewState extends AgentState {
     public boolean allReviewersRan() {
         return failures().isEmpty();
     }
+
+    /**
+     * How many findings were never actually challenged.
+     *
+     * <p>Configuration 3 exists to measure the verifier, so a run where the
+     * verifier could not reach the model is not a measurement of it - and until
+     * this existed, such a run was indistinguishable from a successful one.
+     * Eleven failed verifications were recorded as a result reporting recall
+     * 13/14, higher than the un-verified configuration's 12/14, which a verifier
+     * cannot cause: it removes findings, it never finds them.
+     *
+     * <p>{@link #allReviewersRan()} was the existing guard and it is not enough.
+     * It watches the reviewers; the verifier is a different component and needed
+     * its own signal.
+     *
+     * <p>Counted by marker rather than by a flag on the verdict because a
+     * verifier failure is already recorded honestly - the finding survives and
+     * says why - and that record is the thing worth reading. Adding a parallel
+     * boolean would let the two disagree.
+     */
+    public long verifierFailures() {
+        return verifiedFindings().stream()
+                .filter(f -> f.verdict() != null
+                        && f.verdict().reason() != null
+                        && f.verdict().reason()
+                                .startsWith(com.learning.onboarding.agents.VerifierAgent.NOT_CHALLENGED))
+                .count();
+    }
 }

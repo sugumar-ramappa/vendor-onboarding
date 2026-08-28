@@ -42,6 +42,28 @@ public class VerifierAgent {
     private static final Logger log = LoggerFactory.getLogger(VerifierAgent.class);
 
     /**
+     * Marks a finding whose challenge never happened.
+     *
+     * <p>A constant rather than an inline string because the measurement has to
+     * be able to DETECT this. Configuration 3 is defined by its verifier, and a
+     * run where the verifier failed eleven times was still recorded as a result:
+     * every fixture reported complete, because completeness tracked whether the
+     * REVIEWERS ran and said nothing about the component the configuration is
+     * named after.
+     *
+     * <p>It reported recall 13/14 against configuration 2's 12/14 - which is
+     * impossible on its face, since a verifier can only remove findings, never
+     * discover them. The gap was reviewers failing differently between runs, and
+     * nothing in the output said so.
+     *
+     * <p>So the marker is shared: {@code VerifierAgent} writes it and
+     * {@code ReviewState.verifierFailures()} counts it. A string duplicated in
+     * two places would drift and the guard would quietly stop working.
+     */
+    public static final String NOT_CHALLENGED =
+            "not challenged - the verifier could not run";
+
+    /**
      * Findings at or above this severity get challenged.
      *
      * <p>MAJOR, so BLOCKING and MAJOR are verified and MINOR and INFO are not.
@@ -54,11 +76,18 @@ public class VerifierAgent {
     private final String promptVersion;
     private final PromptLibrary prompts;
     private final VerifierModel model;
+    private final VerifierCache cache;
 
     public VerifierAgent(String promptVersion, PromptLibrary prompts, VerifierModel model) {
+        this(promptVersion, prompts, model, VerifierCache.NONE);
+    }
+
+    public VerifierAgent(String promptVersion, PromptLibrary prompts, VerifierModel model,
+                         VerifierCache cache) {
         this.promptVersion = promptVersion;
         this.prompts = prompts;
         this.model = model;
+        this.cache = cache;
         prompts.get(promptVersion);   // fail at construction, not at first use
     }
 
@@ -114,17 +143,39 @@ public class VerifierAgent {
                 evidence == null || evidence.isBlank() ? "" : evidence + "\n",
                 context.render());
 
+        // The whole rendered prompt is the question, so hashing it covers the
+        // finding, its evidence, anything a gatherMore pass added, and the
+        // application. A re-challenge carrying extra reference data renders a
+        // different string and is therefore correctly a different key.
+        String cacheKey = VerifierCache.key(promptVersion, model.modelName(), user);
+
+        var hit = cache.get(cacheKey);
+        if (hit.isPresent()) {
+            log.info("verifier served {} from cache (original call took {}ms)",
+                    finding.findingId(), hit.get().originalLatencyMs());
+            return hit.get().verdict();
+        }
+
+        long start = System.currentTimeMillis();
         try {
-            return model.challenge(system, user);
+            Verdict verdict = model.challenge(system, user);
+            cache.put(cacheKey, promptVersion, model.modelName(), verdict,
+                    System.currentTimeMillis() - start);
+            return verdict;
 
         } catch (RuntimeException e) {
             // A verifier that could not run must not silently drop the finding.
             // The finding survives, and the reason says why - so a human reading
             // the review can see the challenge did not happen rather than
             // assuming it passed.
+            //
+            // NOT CACHED, deliberately. Storing this would turn one rate limit
+            // into a permanent "the verifier could not run" for this finding,
+            // and every later run would inherit a failure it never had - which
+            // is exactly the class of artefact ResultStore's guard exists to
+            // catch, made permanent instead of transient.
             log.warn("verification failed for {}: {}", finding.findingId(), e.getMessage());
-            return Verdict.survives(
-                    "not challenged - the verifier could not run (" + e.getMessage() + ")");
+            return Verdict.survives(NOT_CHALLENGED + " (" + e.getMessage() + ")");
         }
     }
 

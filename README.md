@@ -8,18 +8,21 @@ application pack independently. This runs those five reviews in one pass,
 reports where they **contradict each other**, and has an adversarial verifier
 try to refute every serious finding before it reaches a human.
 
-**Status: built and being measured.** 64 main classes, 20 test classes, 172
-tests, 14 fixtures. The graph, the five reviewers, the adversarial verifier, the
-conflict detector, the grounding check and the MCP tool server all run. What is
-still in progress is the *measurement* — see below, and
-[`measurements/RESULTS.md`](measurements/RESULTS.md) for whatever has been
-recorded so far.
+**Status: built and measured.** 64 main classes, 20 test classes, 176 tests, 20
+fixtures carrying 26 planted defects. The graph, the five reviewers, the
+adversarial verifier, the conflict detector, the grounding check and the MCP tool
+server all run.
 
-Measuring is slower than building here, and deliberately so: the free tier
-allows 20 model requests per day per model, one configuration over seven
-fixtures costs 35, and a configuration measured over a different fixture set
-than the one it is compared against is not a comparison. So the numbers arrive a
-day at a time.
+All three configurations are measured over the same dense fixture set —
+[`measurements/openai-gpt-oss-120b/RESULTS.md`](measurements/openai-gpt-oss-120b/RESULTS.md).
+The headline is below and it is not one-sided: **the architecture wins recall and
+loses precision**, and the verifier does not currently pay for itself.
+
+Measuring was slower than building here, and deliberately so. A configuration
+measured over a different fixture set than the one it is compared against is not
+a comparison, so a configuration is always re-run over the *whole* set. Free-tier
+limits shaped the pace: Gemini allows 20 requests a day, and Groq caps both
+tokens per minute and tokens per day.
 
 ---
 
@@ -48,42 +51,85 @@ anchoring — and that claim gets measured, not asserted.
 
 ## The claim this project has to earn
 
-Three configurations over the same seven fixtures. Two are measured:
+Three configurations, same five dense fixtures, same fourteen planted defects,
+one model. Measured 2026-08-28 on `openai/gpt-oss-120b` via Groq:
 
 ```
-                                fixtures   recall         false positives   routing
-1  single agent, all five areas     7      1.00  (5/5)          1             n/a
-2  gate + four agents               7      0.80  (4/5)          2            1.0000
-3  gate + four agents + verifier    -         -                 -              -
+                                fixtures   recall          false positives   routing   median
+1  single agent, all five areas     5      0.71  (10/14)         6             n/a       28 s
+2  gate + four agents               5      1.00  (14/14)        31          1.0000       88 s
+3  gate + four agents + verifier    5      0.93  (13/14)        30          1.0000      180 s
 ```
 
-**These numbers do not answer the question the project asks**, and the honest
-reading is not "single agent wins".
+Full data in
+[`measurements/openai-gpt-oss-120b/RESULTS.md`](measurements/openai-gpt-oss-120b/RESULTS.md).
 
-Every one of these fixtures carries **exactly one defect, one per review area**.
+**The architecture earns its recall and does not earn its precision.**
+
+Splitting the work wins decisively on finding defects: 14 of 14 against 10 of 14,
+and on the fixture carrying four separate defects the single agent found two and
+stopped. That is the effect the dense fixtures were built to expose — one call
+asked to check five areas reports the most salient problems and stops, while five
+callers with one job each have no reason to.
+
+It costs precision badly. **Thirty-one false positives against six**, essentially
+all of them on the two clean packs, which drew about fifteen invented findings
+each. Four specialists each looking hard at a clean application will each find
+something to say. On a real onboarding queue that is its own kind of broken, and
+it is the number to fix next.
+
+**The verifier does not currently justify its cost.** Across five fixtures it
+removed exactly two findings — one false positive and one genuine defect — while
+doubling median latency from 88 to 180 seconds. At this sample size that is a
+coin flip, not an improvement, and configuration 3 would not ship on this
+evidence.
+
+### Against the predictions
+
+[`measurements/PREDICTIONS.md`](measurements/PREDICTIONS.md) was committed before
+the run, because the fixture set had been redesigned after an unflattering result
+and "my reasons were good" is not checkable afterwards.
+
+| predicted | outcome |
+|---|---|
+| dense packs: multi-agent wins recall | **held** — 14/14 against 10/14 |
+| F15/F16: the gate no longer blocks on a conditional document | **held** — the reviewers ran at all, which they could not before `applies_when` |
+| F15/F16: "both clean, no findings" | **wrong** — 31 findings between them |
+| conflict probe inside F18 | **fired** — one conflict, `MINOR` against `BLOCKING` on `KEL-AER-500` |
+
+The wrong prediction is the useful one. The gate half was right; what was not
+predicted is that once four reviewers actually run on a clean pack they generate
+fifteen findings each. Fixing the short-circuit was the whole focus, and nobody
+asked what happens downstream of fixing it.
+
+**Still unmeasured:** F19, the cross-cutting fixture, where the defect exists
+only by joining two reviewers' documents — insurance covering Great Britain
+against a delivery list including Belfast. The isolation that prevents anchoring
+also prevents the join, so multi-agent is predicted to **lose** there. It stays
+on the list precisely because it is predicted to be a cost of the architecture.
+
+### The earlier result this replaces
+
+An earlier run over **seven shallow fixtures** reported the opposite — 1.00 for
+the single agent against 0.80 for four agents plus a gate. It is superseded, and
+the reason is worth keeping.
+
+Every one of those fixtures carried **exactly one defect, one per review area**.
 That design measures whether the right document reaches the right reviewer —
 `routingAccuracy`, which scored **1.0000**. It cannot measure whether splitting
 work across specialists beats one generalist, because with one defect there is
 nothing to split: four of the five reviewers have nothing to find on every
-fixture. **The experiment could not have shown multi-agent winning.**
+fixture. **The experiment could not have shown multi-agent winning.** A plumbing
+test was being read as a hypothesis test.
 
-The 0.80 is also one fixture out of five, and it traces entirely to a rulebook
-defect rather than to the architecture — see below.
-
-A dense fixture set was added on 2026-08-26 to test the actual claim, with the
-predicted direction for each class written down first in
-[`measurements/PREDICTIONS.md`](measurements/PREDICTIONS.md) — because redesigning
-an experiment after an unflattering result needs to be checkable rather than
-asserted afterwards.
-
-It is also not the conclusion it looks like. Routing accuracy is **1.0000** —
+It was also not the conclusion it looked like. Routing accuracy is **1.0000** —
 every finding made reached the correct reviewer — so nothing was misrouted. The
 whole gap traces to one row of reference data:
 
-`TIMBER_CHAIN_OF_CUSTODY` is stored as `mandatory = true` for all building
+`TIMBER_CHAIN_OF_CUSTODY` *was* stored as `mandatory = true` for all building
 materials, with its real condition — *"Timber and timber-derived only"* — sitting
-in a free-text `note`. `required_document` has no `applies_when` column, though
-`compliance_rule` does. So the completeness gate correctly reported an
+in a free-text `note`. `required_document` had no `applies_when` column, though
+`compliance_rule` did. So the completeness gate correctly reported an
 incorrect rulebook, declared a pack of steel screws incomplete for want of a
 timber certificate, and **short-circuited the four substantive reviewers** — which
 is why the seeded ASN defect on that fixture could not be found by anyone.
@@ -91,11 +137,14 @@ is why the seeded ASN defect on that fixture could not be found by anyone.
 One data-modelling error, both halves of the score. The single-agent baseline has
 no gate, so it cannot short-circuit, and it caught the defect.
 
+**Fixed** in `V5__required_document_applies_when.sql`, which adds the column, and
+`V6`, which reverts the condition on `QUALITY_AUDIT_REPORT` — a `*` row applying
+to every category, whose condition invalidated roughly 23 cached calls for no
+gain. F15 and F16 are the regression fixtures for it, and the reviewers running
+on them at all is the evidence the fix works.
+
 Full diagnosis, including the first hypothesis that turned out to be wrong, is in
-[`docs/engineering-log.md`](docs/engineering-log.md) §6. The fix is sequenced
-there rather than applied, because it invalidates the reference-data cache for
-both configurations and costs a full day of free-tier quota to re-measure — and
-changing two things before one measurement is how a number stops having a cause.
+[`docs/engineering-log.md`](docs/engineering-log.md) §6.
 
 **What is worth taking from this so far:** the measurement did its job. It was
 built to test "does specialisation help", returned "no", and the "no" turned out

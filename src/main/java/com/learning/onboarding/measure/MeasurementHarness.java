@@ -4,6 +4,7 @@ import com.learning.onboarding.agents.ReviewContext;
 import com.learning.onboarding.agents.ReviewOutcome;
 import com.learning.onboarding.agents.ReviewerAgent;
 import com.learning.onboarding.domain.ReviewFinding;
+import com.learning.onboarding.domain.Severity;
 import com.learning.onboarding.graph.ReviewGraph;
 import com.learning.onboarding.graph.ReviewState;
 import org.slf4j.Logger;
@@ -73,8 +74,14 @@ public class MeasurementHarness {
             // thought before it checked itself.
             List<ReviewFinding> reported = state.survivingFindings();
 
+            // A fixture counts as complete only if every reviewer ran AND every
+            // finding was actually challenged. The second half was missing, so a
+            // configuration whose verifier failed on every finding still recorded
+            // a clean result - see ReviewState.verifierFailures().
+            boolean complete = state.allReviewersRan() && state.verifierFailures() == 0;
+
             FixtureOutcome outcome = score(fixture, reported, state.conflicts().size(),
-                    state.discarded().size(), state.allReviewersRan(), wallClockMs);
+                    state.discarded().size(), complete, wallClockMs);
             outcomes.add(outcome);
 
             log.info("{} / {}: {} caught, {} missed, {} unexpected",
@@ -234,6 +241,51 @@ public class MeasurementHarness {
                     .filter(o -> o.fixture().clean())
                     .mapToInt(o -> o.unexpected().size())
                     .sum();
+        }
+
+        /**
+         * The subset of {@link #falsePositives()} that would actually stop a
+         * vendor: {@code MAJOR} or {@code BLOCKING}.
+         *
+         * <h2>Why this number exists beside the other one</h2>
+         *
+         * The 2026-08-28 run recorded 31 false positives on two clean packs,
+         * which reads as a system that cries wolf. Reading the findings said
+         * otherwise: they are overwhelmingly {@code INFO} entries of the form
+         * <i>"product liability insurance meets the minimum required GBP 5M"</i>
+         * and <i>"case weight of 9.8 kg is below the manual handling limit of
+         * 25 kg"</i>.
+         *
+         * <p>Those are not accusations. They are the reviewer stating what it
+         * checked and that the pack passed - an audit trail, and arguably the
+         * most useful thing it produces. {@code falsePositives()} counts them
+         * identically to a {@code BLOCKING} claim that a compliant vendor is
+         * uninsured, and those two things do not cost the same.
+         *
+         * <p><b>Both are reported, and neither replaces the other.</b> Narrowing
+         * a metric after seeing a number it made look bad is exactly the move
+         * {@code PREDICTIONS.md} exists to prevent, so the original figure stays
+         * in the results file unchanged and this is added next to it. The reader
+         * gets to see that the split was made and what it does to the number.
+         *
+         * <p>The deeper problem is upstream and is not fixed by counting
+         * differently: {@code ReviewOutput} gives a reviewer nowhere to say
+         * "I checked this and it is fine", so a pass has to be expressed as a
+         * finding. The model is using the only channel it has.
+         */
+        public int actionableFalsePositives() {
+            return outcomes.stream()
+                    .filter(o -> o.fixture().clean())
+                    .mapToInt(o -> (int) o.unexpected().stream()
+                            .filter(f -> f.severity() != null
+                                    && f.severity().compareTo(Severity.MAJOR) >= 0)
+                            .count())
+                    .sum();
+        }
+
+        /** Clean-pack findings that only confirm the pack is compliant. */
+        public int confirmatoryFindings() {
+            return falsePositives() - actionableFalsePositives();
         }
 
         public int cleanFixtures() {

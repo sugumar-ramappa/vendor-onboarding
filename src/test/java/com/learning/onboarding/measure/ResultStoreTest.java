@@ -178,6 +178,82 @@ class ResultStoreTest {
                 .contains("No configurations recorded yet");
     }
 
+    /**
+     * The same three fixtures, but one of them never finished its reviews.
+     *
+     * <p>Its recall reads exactly like the complete one's - that is the entire
+     * hazard, and the reason the three tests below exist.
+     */
+    private static MeasurementHarness.Result unfinished(String label) {
+        var complete = fixture("F01", false, 2);
+        var abandoned = fixture("F02", false, 1);
+
+        return new MeasurementHarness.Result(label, List.of(
+                new MeasurementHarness.FixtureOutcome(complete,
+                        complete.expected(), List.of(), complete.expected(),
+                        List.of(), 0, 0, true, 1200L),
+                new MeasurementHarness.FixtureOutcome(abandoned,
+                        List.of(), abandoned.expected(), List.of(),
+                        List.of(), 0, 0, false, 1400L)),
+                true);
+    }
+
+    @Test
+    @DisplayName("a configuration with a reviewer that never ran is quarantined, not reported")
+    void anUnfinishedConfigurationIsKeptOutOfTheReport(@TempDir Path dir) throws IOException {
+        var store = new ResultStore(dir);
+        store.save(3, unfinished("gate + four agents + verifier"));
+        store.writeReport();
+
+        assertThat(dir.resolve("config-3.json")).doesNotExist();
+        assertThat(dir.resolve("incomplete/config-3.json")).exists();
+
+        // Named in the report rather than silently absent: a discarded run needs
+        // re-running and an unattempted one needs starting, and the reader
+        // cannot tell those apart from an empty table.
+        assertThat(Files.readString(dir.resolve("RESULTS.md")))
+                .contains("DISCARDED")
+                .contains("config-3.json");
+    }
+
+    @Test
+    @DisplayName("a clean re-run removes its own earlier quarantined attempt")
+    void aSuccessfulRerunSupersedesTheQuarantinedFile(@TempDir Path dir) throws IOException {
+        var store = new ResultStore(dir);
+        store.save(3, unfinished("gate + four agents + verifier"));
+        assertThat(dir.resolve("incomplete/config-3.json")).exists();
+
+        store.save(3, result("gate + four agents + verifier"));
+        store.writeReport();
+
+        // Left behind, the stale file would make the report show configuration 3
+        // as a result AND announce configuration 3 as discarded - both generated
+        // from real files, with nothing to tell the reader which is current.
+        assertThat(dir.resolve("config-3.json")).exists();
+        assertThat(dir.resolve("incomplete/config-3.json")).doesNotExist();
+        assertThat(Files.readString(dir.resolve("RESULTS.md")))
+                .doesNotContain("DISCARDED");
+    }
+
+    @Test
+    @DisplayName("a failed retry of an already-recorded configuration is dropped, not filed")
+    void aFailedRetryDoesNotDisplaceAGoodResult(@TempDir Path dir) throws IOException {
+        var store = new ResultStore(dir);
+        store.save(3, result("gate + four agents + verifier"));
+        String recorded = Files.readString(dir.resolve("config-3.json"));
+
+        // VerifierAgent has no cache, so re-running configuration 3 pays for
+        // every verifier call again and meets the per-minute token limit every
+        // time. This retry is the normal case, not an unlucky one.
+        store.save(3, unfinished("gate + four agents + verifier"));
+        store.writeReport();
+
+        assertThat(dir.resolve("config-3.json")).content().isEqualTo(recorded);
+        assertThat(dir.resolve("incomplete/config-3.json")).doesNotExist();
+        assertThat(Files.readString(dir.resolve("RESULTS.md")))
+                .doesNotContain("DISCARDED");
+    }
+
     @Test
     @DisplayName("an unwritable directory does not abort the measurement")
     void aFailedWriteIsNotFatal() {

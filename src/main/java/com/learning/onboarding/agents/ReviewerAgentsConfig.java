@@ -76,8 +76,9 @@ public class ReviewerAgentsConfig {
      */
     @Bean
     public VerifierAgent verifierAgent(PromptLibrary prompts,
-                                       VerifierAgent.VerifierModel model) {
-        return new VerifierAgent("verifier-v2", prompts, model);
+                                       VerifierAgent.VerifierModel model,
+                                       VerifierCache cache) {
+        return new VerifierAgent("verifier-v2", prompts, model, cache);
     }
 
     /**

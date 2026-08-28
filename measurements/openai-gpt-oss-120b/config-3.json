@@ -1,19 +1,16 @@
 {
-  "configuration": 1,
-  "label": "single agent, all five areas",
-  "recordedAt": "2026-08-28T07:53:29.481191Z",
+  "configuration": 3,
+  "label": "gate + four agents + verifier",
+  "recordedAt": "2026-08-28T07:27:42.676031Z",
   "fixtures": 5,
   "incompleteFixtures": 0,
   "seeded": 14,
-  "caught": 10,
-  "recall": 0.7143,
-  "falsePositives": 6,
-  "actionableFalsePositives": 6,
-  "confirmatoryFindings": 0,
-  "falsePositiveNote": "falsePositives counts EVERY finding on a clean pack. actionableFalsePositives counts only those at MAJOR or above - the ones that would actually stop a vendor. The difference is confirmatoryFindings: INFO entries saying the pack passed a check, which are an audit trail rather than an accusation. Both are reported because narrowing the metric after seeing the number it made look bad is the move PREDICTIONS.md exists to prevent.",
-  "routingMeaningful": false,
-  "routingAccuracy": 0.1000,
-  "medianWallClockMs": 8,
+  "caught": 13,
+  "recall": 0.9286,
+  "falsePositives": 30,
+  "routingMeaningful": true,
+  "routingAccuracy": 1.0000,
+  "medianWallClockMs": 180412,
   "wallClockCaveat": "Median wall clock per fixture, NOT the sum of model calls - configuration 2 runs four reviewers concurrently, so cost and latency do not scale together. Comparable across configurations ONLY within a single uncached, unthrottled run: a cached call returns in about a millisecond and a rate-limited one spends 20 seconds in backoff, and either dominates this number completely.",
   "perFixture": [
 {
@@ -23,11 +20,11 @@
   "caught": 0,
   "missed": 0,
   "routedCorrectly": 0,
-  "unexpectedFindings": 0,
+  "unexpectedFindings": 15,
   "conflicts": 0,
-  "discardedUngrounded": 0,
+  "discardedUngrounded": 1,
   "reachedCompletion": true,
-  "wallClockMs": 287
+  "wallClockMs": 66
 },
 {
   "fixture": "F16",
@@ -36,37 +33,37 @@
   "caught": 0,
   "missed": 0,
   "routedCorrectly": 0,
-  "unexpectedFindings": 6,
+  "unexpectedFindings": 15,
   "conflicts": 0,
   "discardedUngrounded": 0,
   "reachedCompletion": true,
-  "wallClockMs": 21
+  "wallClockMs": 167
 },
 {
   "fixture": "F17",
   "clean": false,
   "seeded": 4,
-  "caught": 2,
-  "missed": 2,
-  "routedCorrectly": 0,
+  "caught": 4,
+  "missed": 0,
+  "routedCorrectly": 4,
   "unexpectedFindings": 1,
   "conflicts": 0,
   "discardedUngrounded": 0,
   "reachedCompletion": true,
-  "wallClockMs": 8
+  "wallClockMs": 220679
 },
 {
   "fixture": "F18",
   "clean": false,
   "seeded": 5,
-  "caught": 4,
-  "missed": 1,
-  "routedCorrectly": 1,
-  "unexpectedFindings": 1,
-  "conflicts": 0,
+  "caught": 5,
+  "missed": 0,
+  "routedCorrectly": 5,
+  "unexpectedFindings": 2,
+  "conflicts": 1,
   "discardedUngrounded": 0,
   "reachedCompletion": true,
-  "wallClockMs": 6
+  "wallClockMs": 203826
 },
 {
   "fixture": "F20",
@@ -74,12 +71,12 @@
   "seeded": 5,
   "caught": 4,
   "missed": 1,
-  "routedCorrectly": 0,
+  "routedCorrectly": 4,
   "unexpectedFindings": 0,
   "conflicts": 0,
-  "discardedUngrounded": 0,
+  "discardedUngrounded": 1,
   "reachedCompletion": true,
-  "wallClockMs": 6
+  "wallClockMs": 180412
 }
   ]
 }

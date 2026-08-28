@@ -141,11 +141,60 @@ public final class ResultStore {
                 .filter(o -> !o.complete()).count();
         Path target = unfinished == 0 ? dir : dir.resolve("incomplete");
 
+        // A failed attempt at a configuration that ALREADY has a clean recorded
+        // result is not evidence of anything - the good file is the answer, and
+        // quarantining the failure only makes writeReport() name configuration 3
+        // as discarded while the table above it shows configuration 3 as a
+        // result. Two true statements that read as a contradiction.
+        //
+        // This is the mirror of the removal below, and it is not hypothetical:
+        // VerifierAgent has no cache, so re-running configuration 3 pays for
+        // every verifier call again and is exposed to the per-minute token
+        // limit every time. A configuration that is expensive to repeat is
+        // exactly the one that will keep producing these files.
+        //
+        // The already-good result is left untouched. Nothing is overwritten and
+        // nothing is quarantined; the run simply reports that it added nothing.
+        if (unfinished > 0
+                && Files.isRegularFile(dir.resolve("config-%d.json".formatted(configNumber)))) {
+            System.out.printf("""
+                      DISCARDED, not quarantined: configuration %d had %d of %d
+                      fixture(s) where a reviewer or the verifier did not run, but a
+                      COMPLETE result for configuration %d is already recorded. The
+                      earlier result stands; this attempt is dropped rather than
+                      filed, because a failed retry of an answered question is not a
+                      finding.
+                    %n""", configNumber, unfinished, result.outcomes().size(),
+                    configNumber);
+            return;
+        }
+
         try {
             Files.createDirectories(target);
             Path file = target.resolve("config-%d.json".formatted(configNumber));
             Files.writeString(file, toJson(configNumber, result),
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+            // A configuration that has now been measured cleanly supersedes any
+            // earlier quarantined attempt at the SAME configuration. Left in
+            // place, that stale file makes writeReport() announce a discarded run
+            // that no longer exists - so the table shows configuration 3 as a
+            // result and the paragraph below it says configuration 3 was
+            // discarded. Both statements are generated from real files, and the
+            // reader has no way to tell which is current.
+            //
+            // Only the same configuration number is removed, and only on a clean
+            // save. A quarantined run for a configuration that has never
+            // succeeded still has to be visible - that is the whole point of the
+            // directory.
+            if (unfinished == 0) {
+                Path superseded = dir.resolve("incomplete")
+                        .resolve("config-%d.json".formatted(configNumber));
+                if (Files.deleteIfExists(superseded)) {
+                    System.out.printf("  superseded: removed the earlier quarantined "
+                            + "%s, which this run replaces%n", superseded);
+                }
+            }
 
             if (unfinished > 0) {
                 System.out.printf("""
@@ -202,8 +251,8 @@ public final class ResultStore {
             if (files.isEmpty()) {
                 sb.append("_No configurations recorded yet._\n");
             } else {
-                sb.append("| # | configuration | fixtures | recall | caught/seeded | false positives | routing |\n")
-                  .append("|---|---|---:|---:|---:|---:|---:|\n");
+                sb.append("| # | configuration | fixtures | recall | caught/seeded | FP (all) | FP (actionable) | confirmations | routing |\n")
+                  .append("|---|---|---:|---:|---:|---:|---:|---:|---:|\n");
                 var fixtureCounts = new java.util.LinkedHashSet<String>();
                 for (Path f : files) {
                     String json = Files.readString(f);
@@ -352,6 +401,9 @@ public final class ResultStore {
                   "caught": %d,
                   "recall": %.4f,
                   "falsePositives": %d,
+                  "actionableFalsePositives": %d,
+                  "confirmatoryFindings": %d,
+                  "falsePositiveNote": "falsePositives counts EVERY finding on a clean pack. actionableFalsePositives counts only those at MAJOR or above - the ones that would actually stop a vendor. The difference is confirmatoryFindings: INFO entries saying the pack passed a check, which are an audit trail rather than an accusation. Both are reported because narrowing the metric after seeing the number it made look bad is the move PREDICTIONS.md exists to prevent.",
                   "routingMeaningful": %b,
                   "routingAccuracy": %.4f,
                   "medianWallClockMs": %d,
@@ -366,7 +418,8 @@ public final class ResultStore {
                         // context; this field travels with it.
                         outcomes.stream().filter(o -> !o.complete()).count(),
                         r.seeded(), r.caught(), r.recall(),
-                        r.falsePositives(), r.routingMeaningful(),
+                        r.falsePositives(), r.actionableFalsePositives(),
+                        r.confirmatoryFindings(), r.routingMeaningful(),
                         r.routingAccuracy(),
                         // Median, not mean. One rate-limited fixture spends a
                         // minute in backoff and drags a mean far past anything
@@ -399,11 +452,21 @@ public final class ResultStore {
 
     /** Pull the handful of headline numbers back out for the summary table. */
     private String rowFrom(String json) {
-        return "| %s | %s | %s | %s | %s/%s | %s | %s |".formatted(
+        // False positives are split into two columns rather than one, because a
+        // single number here conflates "wrongly told a compliant vendor it is
+        // uninsured" with "noted that the insurance is fine". Older files have
+        // no split; they render "-" rather than a misleading zero.
+        // field() answers "?" for a key that is not there, which is what a file
+        // written before the split looks like.
+        String actionable = field(json, "actionableFalsePositives");
+        String confirmatory = field(json, "confirmatoryFindings");
+        return "| %s | %s | %s | %s | %s/%s | %s | %s | %s | %s |".formatted(
                 field(json, "configuration"), field(json, "label"),
                 field(json, "fixtures"),
                 field(json, "recall"), field(json, "caught"), field(json, "seeded"),
                 field(json, "falsePositives"),
+                "?".equals(actionable) ? "-" : actionable,
+                "?".equals(confirmatory) ? "-" : confirmatory,
                 "true".equals(field(json, "routingMeaningful"))
                         ? field(json, "routingAccuracy") : "n/a");
     }

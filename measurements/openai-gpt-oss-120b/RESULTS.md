@@ -1,71 +1,288 @@
 # Measurement results
 
-**Model: `openai/gpt-oss-120b`.** Every row below was measured on it. Numbers from
-a different model live in a sibling directory and are NOT comparable with these -
-the comparison here is between configurations on one model.
+**Model: `openai/gpt-oss-120b`.** Every row below was measured on it. Numbers from a different model live in a sibling directory and are NOT comparable with these - the comparison here is between configurations on one model.
+
+Generated 2026-08-28T07:53:29.635601Z
 
 Recall and false positives are reported together on purpose. A system that flags
 everything has perfect recall and is useless; one that flags nothing has a perfect
 false-positive rate and is equally useless. Either number alone can be gamed.
 
-| # | configuration | fixtures | recall | caught/seeded | false positives | routing |
-|---|---|---:|---:|---:|---:|---:|
-| 1 | single agent | 14 | 0.8182 | 9/11 | 4 | n/a |
-| 2 | gate + four agents | - | not measured | - | - | - |
-| 3 | gate + four agents + verifier | - | not measured | - | - | - |
+| # | configuration | fixtures | recall | caught/seeded | FP (all) | FP (actionable) | confirmations | routing |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | single agent | 5 | 0.7143 | 10/14 | 6 | 6 | 0 | n/a |
+| 2 | gate + four agents | 5 | 1.0000 | 14/14 | 31 | 0 | 31 | 1.0000 |
+| 3 | gate + four agents + verifier | 5 | 0.9286 | 13/14 | 30 | - | - | 1.0000 |
 
-## Why 2 and 3 are blank rather than filled in
+## Raw
 
-They ran, produced numbers, and **those numbers were discarded**. Both are in
-`../quarantine-incomplete/` rather than deleted, so the decision can be checked.
+`config-1.json`
 
-Groq's free tier caps **tokens per day at 200,000**, not requests per minute as
-assumed when this provider was adopted. At roughly 4,400 tokens per review call
-that is about 45 calls a day, and the full experiment - three configurations over
-14 fixtures - is 112 calls, or around 493,000 tokens. It does not fit in a day.
-
-The cap was reached partway through configuration 2. Every subsequent reviewer
-failed with
+```json
+{
+  "configuration": 1,
+  "label": "single agent, all five areas",
+  "recordedAt": "2026-08-28T07:53:29.481191Z",
+  "fixtures": 5,
+  "incompleteFixtures": 0,
+  "seeded": 14,
+  "caught": 10,
+  "recall": 0.7143,
+  "falsePositives": 6,
+  "actionableFalsePositives": 6,
+  "confirmatoryFindings": 0,
+  "falsePositiveNote": "falsePositives counts EVERY finding on a clean pack. actionableFalsePositives counts only those at MAJOR or above - the ones that would actually stop a vendor. The difference is confirmatoryFindings: INFO entries saying the pack passed a check, which are an audit trail rather than an accusation. Both are reported because narrowing the metric after seeing the number it made look bad is the move PREDICTIONS.md exists to prevent.",
+  "routingMeaningful": false,
+  "routingAccuracy": 0.1000,
+  "medianWallClockMs": 8,
+  "wallClockCaveat": "Median wall clock per fixture, NOT the sum of model calls - configuration 2 runs four reviewers concurrently, so cost and latency do not scale together. Comparable across configurations ONLY within a single uncached, unthrottled run: a cached call returns in about a millisecond and a rate-limited one spends 20 seconds in backoff, and either dominates this number completely.",
+  "perFixture": [
+{
+  "fixture": "F15",
+  "clean": true,
+  "seeded": 0,
+  "caught": 0,
+  "missed": 0,
+  "routedCorrectly": 0,
+  "unexpectedFindings": 0,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 287
+},
+{
+  "fixture": "F16",
+  "clean": true,
+  "seeded": 0,
+  "caught": 0,
+  "missed": 0,
+  "routedCorrectly": 0,
+  "unexpectedFindings": 6,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 21
+},
+{
+  "fixture": "F17",
+  "clean": false,
+  "seeded": 4,
+  "caught": 2,
+  "missed": 2,
+  "routedCorrectly": 0,
+  "unexpectedFindings": 1,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 8
+},
+{
+  "fixture": "F18",
+  "clean": false,
+  "seeded": 5,
+  "caught": 4,
+  "missed": 1,
+  "routedCorrectly": 1,
+  "unexpectedFindings": 1,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 6
+},
+{
+  "fixture": "F20",
+  "clean": false,
+  "seeded": 5,
+  "caught": 4,
+  "missed": 1,
+  "routedCorrectly": 0,
+  "unexpectedFindings": 0,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 6
+}
+  ]
+}
 
 ```
-429: tokens per day (TPD): Limit 200000, Used 196902
+
+`config-2.json`
+
+```json
+{
+  "configuration": 2,
+  "label": "gate + four agents, no verifier",
+  "recordedAt": "2026-08-28T07:53:29.635202Z",
+  "fixtures": 5,
+  "incompleteFixtures": 0,
+  "seeded": 14,
+  "caught": 14,
+  "recall": 1.0000,
+  "falsePositives": 31,
+  "actionableFalsePositives": 0,
+  "confirmatoryFindings": 31,
+  "falsePositiveNote": "falsePositives counts EVERY finding on a clean pack. actionableFalsePositives counts only those at MAJOR or above - the ones that would actually stop a vendor. The difference is confirmatoryFindings: INFO entries saying the pack passed a check, which are an audit trail rather than an accusation. Both are reported because narrowing the metric after seeing the number it made look bad is the move PREDICTIONS.md exists to prevent.",
+  "routingMeaningful": true,
+  "routingAccuracy": 1.0000,
+  "medianWallClockMs": 22,
+  "wallClockCaveat": "Median wall clock per fixture, NOT the sum of model calls - configuration 2 runs four reviewers concurrently, so cost and latency do not scale together. Comparable across configurations ONLY within a single uncached, unthrottled run: a cached call returns in about a millisecond and a rate-limited one spends 20 seconds in backoff, and either dominates this number completely.",
+  "perFixture": [
+{
+  "fixture": "F15",
+  "clean": true,
+  "seeded": 0,
+  "caught": 0,
+  "missed": 0,
+  "routedCorrectly": 0,
+  "unexpectedFindings": 16,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 60
+},
+{
+  "fixture": "F16",
+  "clean": true,
+  "seeded": 0,
+  "caught": 0,
+  "missed": 0,
+  "routedCorrectly": 0,
+  "unexpectedFindings": 15,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 26
+},
+{
+  "fixture": "F17",
+  "clean": false,
+  "seeded": 4,
+  "caught": 4,
+  "missed": 0,
+  "routedCorrectly": 4,
+  "unexpectedFindings": 1,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 22
+},
+{
+  "fixture": "F18",
+  "clean": false,
+  "seeded": 5,
+  "caught": 5,
+  "missed": 0,
+  "routedCorrectly": 5,
+  "unexpectedFindings": 2,
+  "conflicts": 1,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 21
+},
+{
+  "fixture": "F20",
+  "clean": false,
+  "seeded": 5,
+  "caught": 5,
+  "missed": 0,
+  "routedCorrectly": 5,
+  "unexpectedFindings": 0,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 17
+}
+  ]
+}
+
 ```
 
-so six of the fourteen fixtures - F09 to F14 - recorded `reachedCompletion:
-false`. The recorded figures were:
+`config-3.json`
+
+```json
+{
+  "configuration": 3,
+  "label": "gate + four agents + verifier",
+  "recordedAt": "2026-08-28T07:27:42.676031Z",
+  "fixtures": 5,
+  "incompleteFixtures": 0,
+  "seeded": 14,
+  "caught": 13,
+  "recall": 0.9286,
+  "falsePositives": 30,
+  "routingMeaningful": true,
+  "routingAccuracy": 1.0000,
+  "medianWallClockMs": 180412,
+  "wallClockCaveat": "Median wall clock per fixture, NOT the sum of model calls - configuration 2 runs four reviewers concurrently, so cost and latency do not scale together. Comparable across configurations ONLY within a single uncached, unthrottled run: a cached call returns in about a millisecond and a rate-limited one spends 20 seconds in backoff, and either dominates this number completely.",
+  "perFixture": [
+{
+  "fixture": "F15",
+  "clean": true,
+  "seeded": 0,
+  "caught": 0,
+  "missed": 0,
+  "routedCorrectly": 0,
+  "unexpectedFindings": 15,
+  "conflicts": 0,
+  "discardedUngrounded": 1,
+  "reachedCompletion": true,
+  "wallClockMs": 66
+},
+{
+  "fixture": "F16",
+  "clean": true,
+  "seeded": 0,
+  "caught": 0,
+  "missed": 0,
+  "routedCorrectly": 0,
+  "unexpectedFindings": 15,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 167
+},
+{
+  "fixture": "F17",
+  "clean": false,
+  "seeded": 4,
+  "caught": 4,
+  "missed": 0,
+  "routedCorrectly": 4,
+  "unexpectedFindings": 1,
+  "conflicts": 0,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 220679
+},
+{
+  "fixture": "F18",
+  "clean": false,
+  "seeded": 5,
+  "caught": 5,
+  "missed": 0,
+  "routedCorrectly": 5,
+  "unexpectedFindings": 2,
+  "conflicts": 1,
+  "discardedUngrounded": 0,
+  "reachedCompletion": true,
+  "wallClockMs": 203826
+},
+{
+  "fixture": "F20",
+  "clean": false,
+  "seeded": 5,
+  "caught": 4,
+  "missed": 1,
+  "routedCorrectly": 4,
+  "unexpectedFindings": 0,
+  "conflicts": 0,
+  "discardedUngrounded": 1,
+  "reachedCompletion": true,
+  "wallClockMs": 180412
+}
+  ]
+}
 
 ```
-2  gate + four agents              recall 0.55 (6/11)   false positives 7
-3  gate + four agents + verifier   recall 0.55 (6/11)   false positives 2
-```
 
-**Both are meaningless, and the second is actively misleading.** Configuration 3
-appears to cut false positives from 7 to 2, which is exactly the improvement the
-verifier exists to produce - and it is an artefact. Those false positives were not
-refuted by a verifier; the reviewers that would have raised them never ran. A
-number that moves the way the hypothesis predicts, for a reason unrelated to the
-hypothesis, is the most dangerous kind of result a measurement can produce.
-
-Configuration 1 completed before the cap and had **zero** reviewer failures on all
-14 fixtures, so it stands.
-
-## What this cost, and the mistake behind it
-
-Roughly 197,000 tokens, of which about 88,000 went on an aborted configuration 2
-run that was corrupted by a separate defect (`logistics-v2` instructing a tool
-call that the measurement had disabled - see the engineering log). Nearly half a
-day's budget spent on a run whose output was discarded.
-
-The underlying error was assuming a "free tier" means one kind of limit. It does
-not:
-
-```
-Gemini   20 requests/day          -> a SCHEDULING problem, six days for this experiment
-Groq     8,000 tokens/minute      -> a THROTTLING problem, ~1.6 calls/min
-         200,000 tokens/day       -> a SCHEDULING problem again, ~2.5 days
-```
-
-The per-minute limit was found and planned around. The per-day limit was not
-looked for, because the per-minute one had already been accepted as "the"
-constraint. **Both existed the whole time.** Checking the provider's quota page
-before spending 197,000 tokens would have cost two minutes.

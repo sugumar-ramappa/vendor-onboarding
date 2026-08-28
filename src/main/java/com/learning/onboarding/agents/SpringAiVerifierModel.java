@@ -51,9 +51,38 @@ public class SpringAiVerifierModel implements VerifierAgent.VerifierModel {
     public SpringAiVerifierModel(
             ChatClient.Builder builder,
             ToolCallback[] referenceDataCallbacks,
-            @Value("${spring.ai.google.genai.chat.options.model}") String modelName) {
+            // Provider-agnostic, matching SpringAiReviewModel. This read
+            // spring.ai.google.genai.* and therefore reported the GEMINI model
+            // name for findings a Groq model had verified. The reviewer had the
+            // same bug and it was fixed there; this sibling was missed, which is
+            // the recurring shape of this project's defects - a fix applied to
+            // one class and not to the one beside it.
+            @Value("${onboarding.model.name}") String modelName,
+            // TOOLS OFF FOR THE MEASUREMENT, and this is the fix that matters.
+            //
+            // The verifier attached tool callbacks unconditionally, ignoring the
+            // profile that switches them off for the reviewers. Three
+            // consequences, in order of how badly they hurt:
+            //
+            // 1. A tool call is a SECOND billed request, which is the entire
+            //    cost the measurement's pre-resolved rulebooks exist to avoid.
+            //
+            // 2. A tool call makes the exchange MULTI-TURN: assistant message
+            //    with the call, tool result, assistant again. gpt-oss-120b is a
+            //    reasoning model, so its assistant message carries
+            //    `reasoning_content` - and Groq REFUSES that field on input:
+            //
+            //      400: 'messages.2' property 'reasoning_content' is unsupported
+            //
+            //    The model emits a field the same API rejects when echoed back.
+            //    Eleven verifications failed this way, which silently gutted
+            //    configuration 3 while every fixture still reported complete.
+            //
+            // 3. Single-turn removes the problem entirely rather than working
+            //    around it by stripping fields from a conversation.
+            @Value("${onboarding.model.tools-enabled:true}") boolean toolsEnabled) {
         this.chat = builder.build();
-        this.tools = referenceDataCallbacks;
+        this.tools = toolsEnabled ? referenceDataCallbacks : new ToolCallback[0];
         this.modelName = modelName;
     }
 

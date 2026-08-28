@@ -305,6 +305,9 @@ architecture or a model change with no way to tell.
 |---|---|
 | **Review latency** | 105s. Section 1. Blocks step 8 |
 | **MCP server publishes no tools** | In-process tool calling works, but the server logs `No tool methods found`. The `ToolCallbackProvider` bean is not reaching the MCP autoconfiguration |
+| **31 false positives on clean packs** | The headline cost of the architecture, measured 28 Aug. Four reviewers each invent findings on a clean application. Section 7 |
+| **`VerifierAgent` has no cache** | The most expensive call is the only uncached one. The key is harder than a reviewer's because it must cover a set of findings. Section 7 |
+| **F19 not measured** | The cross-cutting fixture, predicted to make multi-agent **lose**. Deliberately still open — it is the prediction that would cost the architecture something |
 
 ---
 
@@ -641,6 +644,116 @@ Worth keeping as a lesson in its own right: **the hypothesis was right and could
 not be confirmed on the provider I had**, because that provider absorbed the
 failure silently. Adopting a second provider for quota reasons paid for itself in
 prompt bugs found.
+
+---
+
+# 7. The measurement that finally answered the question
+
+**2026-08-28.** All three configurations, same five dense fixtures, same fourteen
+planted defects, one model.
+
+```
+#  configuration                    recall          false positives   routing   median
+1  single agent, all five areas     0.71 (10/14)          6             n/a       28 s
+2  gate + four agents               1.00 (14/14)         31          1.0000       88 s
+3  gate + four agents + verifier    0.93 (13/14)         30          1.0000      180 s
+```
+
+**The hypothesis held, and the cost was bigger than expected.**
+
+Recall: 14 of 14 against 10 of 14. On F17, carrying four separate defects, the
+single agent found two and stopped. That is attention dilution, and it is exactly
+what the dense fixtures were built to expose — the shallow set could not have
+shown it, because with one defect per fixture there is nothing to dilute.
+
+Precision: 31 false positives against 6, essentially all on the two clean packs.
+**This was predicted to be zero.** See below.
+
+## The prediction that was wrong, and why it is the useful one
+
+`PREDICTIONS.md` said F15 and F16 would come back clean. They came back with 16
+and 15 findings under configuration 2.
+
+The prediction was half right in a way worth separating. The *gate* behaved as
+predicted: the `applies_when` migration worked, the pack was not wrongly declared
+incomplete, and the four reviewers **ran** — which is the whole point, because
+before V5 they were short-circuited. The evidence the fix works is that there
+were fifteen findings to be wrong about at all.
+
+What was not predicted is what happens downstream of fixing it. Four specialists,
+each told to look hard at one area, each find something to say about a clean
+application. Nobody asked what the reviewers would do once they were finally
+allowed to run.
+
+**The lesson generalises past this project:** a fix was scoped to the failure it
+was diagnosed from. The gate was blocking wrongly, so the fix made the gate stop
+blocking wrongly, and the measurement of that fix was "does the gate pass". The
+question never asked was what the newly-unblocked path produces.
+
+## The verifier does not pay for itself
+
+Across five fixtures the verifier discarded exactly two findings: one false
+positive on F15 and one **genuine** defect on F20. Net effect: recall 14/14 →
+13/14, false positives 31 → 30, median latency 88 s → 180 s.
+
+At this sample size that is a coin flip. The adversarial verifier is the most
+conceptually interesting component in the project and the measurement says it is
+not currently worth its cost — which is the result worth reporting precisely
+because it is unflattering to the design.
+
+**What it does not say** is that verification is a bad idea. Five fixtures is a
+small sample, and the verifier is calibrated to refute rather than to rank. It
+says this verifier, on this evidence, does not ship.
+
+## VerifierAgent has no cache
+
+**Symptom.** Re-running configuration 3 to regenerate the report — with every
+reviewer served from cache — still spent five minutes and hit the per-minute
+token limit, then failed on two fixtures.
+
+**Cause.** `ReviewerAgent` consults the review cache. `VerifierAgent` does not.
+Every configuration-3 run pays for every verifier call again.
+
+That is the reverse of where caching was needed. The verifier is the most
+expensive component — it is multi-turn, it can loop through `gatherMore`, and it
+runs after four reviewers have already produced findings — so it is the one call
+that most wants a cache and is the only one without.
+
+**Not yet fixed**, and the reason is recorded rather than assumed: the verifier's
+cache key is harder than the reviewer's. A reviewer's key is
+`(area, prompt version, model, rendered prompt)` and is fully determined before
+the call. The verifier's input includes *the findings the reviewers produced*, so
+the key has to cover a set of findings whose order is not guaranteed. Getting
+that wrong caches a verdict against the wrong evidence, which is worse than
+paying twice.
+
+## The guard earned its keep a second time
+
+That failed re-run produced a complete-looking configuration 3 with two fixtures
+whose verifier never ran. `ResultStore` refused to overwrite the good result with
+it — the guard added after the run that reported recall 13/14 for configuration 3
+against 12/14 for configuration 2, which a verifier cannot do, since it only ever
+removes findings.
+
+It then exposed the next layer of the same problem. The quarantined file sat in
+`incomplete/` while a good `config-3.json` sat beside it, so `writeReport()`
+rendered configuration 3 as a result *and* announced configuration 3 as
+discarded. Both statements were generated from real files and neither was
+wrong; the reader had no way to tell which was current.
+
+**Fix, applied.** Two symmetric rules in `ResultStore.save()`:
+
+- a **clean** save removes any earlier quarantined file for the same
+  configuration — it has been superseded
+- a **failed** save for a configuration that already has a clean result is
+  dropped rather than filed — a failed retry of an answered question is not a
+  finding
+
+Three tests cover the quarantine path, which previously had none.
+
+**The shape worth remembering:** the guard was correct and its *reporting* was
+not. Refusing to record a bad number is only half the job; the other half is that
+the report cannot state two things that contradict each other.
 
 ---
 
