@@ -307,7 +307,7 @@ architecture or a model change with no way to tell.
 | **MCP server publishes no tools** | In-process tool calling works, but the server logs `No tool methods found`. The `ToolCallbackProvider` bean is not reaching the MCP autoconfiguration |
 | **`ReviewOutput` has no channel for "checked, and it is fine"** | The real defect behind the 31 clean-pack findings. A reviewer can only speak through `findings`, so a pass has to be expressed as one. Same shape as the gate bug: "nobody looked" and "looked and found nothing" come out the same pipe. Section 7 |
 | **Configuration 3 not scored under the severity split** | Configurations 1 and 2 report actionable and confirmatory counts; 3 predates the metric and its columns are blank. Cheap now the verifier cache exists |
-| **The latency figures still need backfilling into the result files** | `medianCriticalPathMs` now exists (§8) and survives a cached run, but no result file carries it yet. Regenerate all three configurations from cache — free — and the 28 s / 88 s that currently live only in prose become recorded numbers |
+| **Configuration 3's latency is still unrecorded** | Configurations 1 and 2 were regenerated from cache on 29 Aug and now carry `medianCriticalPathMs` — 27.6 s and 87.8 s, confirming the prose. Configuration 3 cannot be: `VerifierAgent` writes no audit entry, so its critical path is unreconstructable and its column renders `-`. Fixing that means instrumenting the verifier, not re-running it |
 | **F19 not measured** | The cross-cutting fixture, predicted to make multi-agent **lose**. Deliberately still open — and now the *only* predicted cost left, since the precision cost turned out not to be real. Deferred until configuration 3 is re-scored |
 
 ---
@@ -878,6 +878,30 @@ seconds behind a 10-second gate: 55 s, not 130 s.
 calls are invisible to this and its figure is a floor rather than a total. That
 is the same blind spot that let the most expensive component run uncached for a
 day: the verifier was built as the interesting idea and instrumented last.
+
+## The result, 29 August
+
+Configurations 1 and 2 regenerated from cache — every call a hit, **no quota
+spent** — and the reconstruction landed at:
+
+```
+                        prose said   reconstructed   wall clock (cached)
+1  single agent            28 s         27.6 s            12 ms
+2  gate + four agents      88 s         87.8 s            23 ms
+```
+
+**The hand-transcribed figures were right.** That is worth stating plainly,
+because the problem was never that the numbers were wrong — it was that nothing
+could show they were right. A correct number with no provenance and an incorrect
+one are indistinguishable to a reader, and the whole point of a measured project
+is that a reader does not have to take your word for it.
+
+The wall-clock column beside it is the evidence for the diagnosis: 12 ms and
+23 ms, the cache being timed, exactly as predicted.
+
+Configuration 3 still renders `-`, and cannot be fixed by re-running: the
+verifier writes no audit entry, so there is nothing to reconstruct from. That is
+an instrumentation gap, not a measurement one.
 
 **The shape worth remembering:** the number was already being collected and
 already correct. What was missing was a consumer, and its absence was disguised

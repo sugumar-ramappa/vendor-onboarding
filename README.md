@@ -72,18 +72,19 @@ against that.
 Configuration 3 predates the actionable/confirmatory split and has not been
 re-scored under it, so its second column is left blank rather than assumed.
 
-**The median column is the weakest number here, and the harness has just been
-fixed so it stops being.** These seconds were carried in prose from the original
-uncached run; the stored files record 8 ms and 22 ms for configurations 1 and 2,
-because a stopwatch around a fully cached run measures the cache.
+**The median column was carried in prose until 29 August, and is now recorded.**
+It had no result file behind it: a stopwatch around a fully cached re-run
+measures the cache, so configurations 1 and 2 recorded 12 ms and 23 ms while
+every document quoted 28 s and 88 s from memory of the original run.
 
 The durations were never lost — a cache hit returns the original call's
-`latencyMs` in its audit entry, so the run still knows what the work cost. What
-was missing was anything reading them back. `medianCriticalPathMs` now does:
-gate plus the **slowest** concurrent reviewer, rebuilt from the audit records,
-which survives a cached re-run. Regenerating all three configurations from cache
-will fill it in at no quota cost. Until then this column stays as-is and is
-marked approximate.
+`latencyMs` in its audit entry — so the fix was a reader, not a re-measurement.
+`medianCriticalPathMs` rebuilds the journey from the audit records: the gate plus
+the **slowest** concurrent reviewer, never their sum.
+
+Regenerated from cache at zero cost, it lands at **27.6 s and 87.8 s** — which
+is what the prose had said. The transcription was accurate, and it is now
+reproducible from a file rather than trusted.
 
 Full data in
 [`measurements/openai-gpt-oss-120b/RESULTS.md`](measurements/openai-gpt-oss-120b/RESULTS.md).
@@ -122,12 +123,10 @@ channel it has. That is the same shape as the gate bug one level up, where a
 skipped review was reported indistinguishably from a clean one, and it is the
 thing to fix next.
 
-**The cost is latency:** roughly 88 seconds against 28 for the same pack — three
-times slower to find four more defects out of fourteen. Roughly, because of the
-caveat above: those two figures come from the original uncached run and are not
-reproducible from the stored files. The direction is not in doubt — four
-concurrent reviewers plus a gate cannot beat one call — but the ratio needs one
-clean re-measurement before it is quoted as a result.
+**The cost is latency:** 87.8 seconds against 27.6 for the same pack — **3.2×
+slower** to find four more defects out of fourteen. Not 5×, despite five calls
+against one, because the four reviewers run concurrently on virtual threads and
+the pack waits for the slowest rather than for all of them.
 
 **The verifier does not currently justify its cost.** Across five fixtures it
 removed exactly two findings — one false positive and one genuine defect — while
