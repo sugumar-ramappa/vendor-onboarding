@@ -176,13 +176,30 @@ fixture. Those are reported as *"needs human review"*.
 > `WARNING: 2 fixture(s) had a reviewer that did not run — these numbers measure
 > the free tier, not the architecture`
 
-## The three configurations
+## The four configurations
 
 ```
 1. single agent, all five areas
 2. five agents, no verifier          ← does independence help?
 3. five agents + verifier            ← does refutation cut noise?
+4. single agent + verifier           ← WHICH failure does a guardrail fix?
 ```
+
+Configuration 4 was added on 30 Aug, after the calibration showed the verifier
+works and had simply been attached to the configuration that does not fabricate.
+It exists to explain why the winner wins: it separates the single agent's two
+failures, and a guardrail fixes only one of them.
+
+```
+                             finds     wrongly blocks
+1  single agent              10/14           6
+4  single agent + verifier   10/14           1
+2  gate + four specialists   14/14           0
+3  + verifier                14/14           0
+```
+
+**Recall cannot move between 1 and 4** - a verifier only deletes findings, never
+creates one. Fabrication is fixable with a checker; blindness is not.
 
 One change between each, so every difference has one cause.
 

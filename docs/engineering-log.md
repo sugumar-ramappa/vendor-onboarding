@@ -651,7 +651,7 @@ prompt bugs found.
 
 # 7. The measurement that finally answered the question
 
-**2026-08-28.** All three configurations, same five dense fixtures, same fourteen
+**2026-08-28.** All three configurations then defined, same five dense fixtures, same fourteen
 planted defects, one model. F17, F18 and F20 carry the defects (4, 5 and 5); F15
 and F16 are clean, so **the false-positive column is a count over two packs**.
 
