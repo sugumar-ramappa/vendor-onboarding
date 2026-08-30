@@ -54,6 +54,16 @@ Rough orders of magnitude, same machine, same review:
 | **One model call** | **~30,000 ms** | **300,000×** |
 | **One vision page** | **~8,000 ms** | **80,000×** |
 
+> **The model-call figure was an estimate and is now measured.** The 29-30 August
+> runs recorded **86 reviewer calls**: median **28,024 ms**, range 1.6 s to 77.4 s.
+> The order of magnitude in the table holds, and the spread is the part worth
+> knowing - a single call varying between two seconds and seventy-seven is why
+> latency is reported as a median rather than a mean, and why one rate-limited
+> fixture can dominate an average.
+>
+> Recoverable from the audit records because a cache hit returns the *original*
+> call's latency rather than the lookup time.
+
 Everything else is free by comparison. A design decision that removes one model
 call is worth more than every other optimisation in the codebase combined.
 
