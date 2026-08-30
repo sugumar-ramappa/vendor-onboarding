@@ -306,9 +306,10 @@ architecture or a model change with no way to tell.
 | **Review latency** | 105s. Section 1. Blocks step 8 |
 | **MCP server publishes no tools** | In-process tool calling works, but the server logs `No tool methods found`. The `ToolCallbackProvider` bean is not reaching the MCP autoconfiguration |
 | **`ReviewOutput` has no channel for "checked, and it is fine"** | The real defect behind the 31 clean-pack findings. A reviewer can only speak through `findings`, so a pass has to be expressed as one. Same shape as the gate bug: "nobody looked" and "looked and found nothing" come out the same pipe. Section 7 |
-| **Configuration 3 not scored under the severity split** | Configurations 1 and 2 report actionable and confirmatory counts; 3 predates the metric and its columns are blank. Cheap now the verifier cache exists |
-| **Configuration 3's latency is still unrecorded** | Configurations 1 and 2 were regenerated from cache on 29 Aug and now carry `medianCriticalPathMs` — 27.6 s and 87.8 s, confirming the prose. Configuration 3 cannot be: `VerifierAgent` writes no audit entry, so its critical path is unreconstructable and its column renders `-`. Fixing that means instrumenting the verifier, not re-running it |
-| **F19 not measured** | The cross-cutting fixture, predicted to make multi-agent **lose**. Deliberately still open — and now the *only* predicted cost left, since the precision cost turned out not to be real. Deferred until configuration 3 is re-scored |
+| **`VerifierAgent` writes no `AuditEntry`** | So configurations 3 and 4 have no reconstructable critical-path latency and their column shows the reviewers' time only. It is also why the verifier ran uncached for a day: the most expensive component was instrumented last. Section 8 |
+| **Grounding cannot check a reference-data citation** | A finding citing the rulebook is now sent to a human instead of deleted, which is safe but not verified. Closing it properly means putting the rulebook in state before the first verify pass, not after. Section 9 |
+| **F19 not measured** | The cross-cutting fixture, predicted to make multi-agent **lose**. Deliberately still open, and now the only predicted cost of the architecture that has not been tested - the precision cost turned out not to be real, and the verifier turned out to work |
+| **The verifier is the same model as the reviewers** | `gpt-oss-120b` checking `gpt-oss-120b`. It refuted 5 of 6 fabrications anyway, so the concern was overstated - but a stronger or simply different model for the check is the obvious next experiment, and the calibration harness now exists to score it |
 
 ---
 
@@ -661,7 +662,7 @@ here without a result file behind it — see §5.
 #  configuration                    recall          false positives   routing   median
 1  single agent, all five areas     0.71 (10/14)          6             n/a       28 s
 2  gate + four agents               1.00 (14/14)         31          1.0000       88 s
-3  gate + four agents + verifier    0.93 (13/14)         30          1.0000      180 s
+3  gate + four agents + verifier    1.00 (14/14)         30          1.0000      180 s
 ```
 
 **The hypothesis held, and the cost was bigger than expected.**
@@ -740,20 +741,89 @@ reported indistinguishably from a clean one. Twice now, in different components,
 problem" — have shared an output with no way to tell them apart. **The fix is a
 type change, not a prompt change.**
 
-## The verifier does not pay for itself
+## The verifier refuted nothing, and it took two more measurements to learn why
 
-Across five fixtures the verifier discarded exactly two findings: one false
-positive on F15 and one **genuine** defect on F20. Net effect: recall 14/14 →
-13/14, false positives 31 → 30, median latency 88 s → 180 s.
+**Superseded 30 Aug.** This section originally read *"the verifier does not pay
+for itself"* and attributed two removals to it: a false positive on F15 and a
+genuine defect on F20. **The verifier removed neither.** Both were the grounding
+check - one a fabricated citation, correctly caught, and one a correct finding
+wrongly deleted, which §9 covers. The verifier refuted **zero** findings across
+48, in two separate runs.
 
-At this sample size that is a coin flip. The adversarial verifier is the most
-conceptually interesting component in the project and the measurement says it is
-not currently worth its cost — which is the result worth reporting precisely
-because it is unflattering to the design.
+That number read as a broken component and is not. Kept here as written because
+the sequence is the point: a plausible conclusion, drawn from a real measurement,
+about the wrong component.
 
-**What it does not say** is that verification is a bad idea. Five fixtures is a
-small sample, and the verifier is calibrated to refute rather than to rank. It
-says this verifier, on this evidence, does not ship.
+**The reason is a severity threshold.** `VerifierAgent.WORTH_CHALLENGING` is
+`MAJOR`, and configuration 2's false positives were *all* `INFO` confirmations -
+below the line, never challenged. On the clean packs it made no calls at all:
+F15 and F16 processed thirty findings in 26 milliseconds. Everything it *was*
+handed - the fourteen planted defects - was true, and it correctly left all of
+them standing.
+
+**Zero was the right answer to every question it was asked.** It had never been
+shown a false finding.
+
+## The blind spot this project had already diagnosed elsewhere
+
+`prompt-eval`, a sibling project, calibrates an LLM judge against 30 correct and
+30 deliberately wrong answers, and its own notes say why: *with only correct
+answers to grade, false accepts are undetectable - you cannot observe a judge
+waving through a wrong answer you never showed it.*
+
+The verifier was in exactly that position and nobody noticed for two runs. The
+same mistake, in the same workspace, in two projects, three days apart.
+
+**The fix was the same method.** `VerifierCalibrationRunner` builds a balanced
+set with no labelling judgement in it: every finding on a clean pack is false by
+construction, and every finding matching a planted defect is true because the
+fixture author planted it. The single agent supplies the false half - it
+fabricates at `MAJOR` and above, which is what makes it visible to the verifier
+at all.
+
+```
+known-FALSE findings refuted:  4 of 6      <- bench, one shot, no evidence
+known-TRUE  findings refuted:  0 of 7
+```
+
+**The prediction was wrong, and that is the finding.** `PREDICTIONS.md` said
+under half, reasoning that `gpt-oss-120b` checking `gpt-oss-120b` shares the
+blind spot that produced the claim. It refuted two thirds.
+
+**How it refutes** is worth recording, because it is not cleverness. The product
+list contains the line *"No hazardous goods. No aerosols. No liquids."* The
+single agent had that document and did not read it; the verifier found it, quoted
+it, and killed three claims on it. On the arithmetic fabrication it went further:
+*"the product list only states that the case pack of 24 brushes weighs 3.4 kg; it
+does not specify a per-unit weight"* - diagnosing the misreading, not just the
+wrong number.
+
+## Configuration 4: the same verifier, the architecture that needs it
+
+Run 30 Aug, predicted first. Bolted onto the single agent - the one that
+fabricates - the verifier takes false positives from **6 to 1**:
+
+```
+                     finds     wrongly blocks a clean vendor
+1  single agent      10/14                 6
+4  + verifier        10/14                 1
+```
+
+Five of six, better than the bench's four, because the pipeline gives it the
+`gatherMore` cycle the bench harness did not. Three measurements of one quantity,
+converging upward as the verifier gets more of what it asked for: 4/6, 4/6, 5/6.
+
+**Recall does not move, and cannot.** `VerifierAgent` has no path that creates a
+finding. Predicted as exactly 10/14 for that reason, and stated first so that any
+*higher* number would read as a harness bug rather than a good result.
+
+> Fabrication is fixable with a checker. Missing things is not. Only
+> specialisation bought recall.
+
+**Configuration 3 still does not ship**, and now for a precise reason rather than
+a vague one: it matches configuration 2 on both numbers while roughly doubling
+wall clock, because it insures against a failure mode the four specialists do not
+have.
 
 ## VerifierAgent had no cache — fixed the same day
 
@@ -906,6 +976,90 @@ an instrumentation gap, not a measurement one.
 **The shape worth remembering:** the number was already being collected and
 already correct. What was missing was a consumer, and its absence was disguised
 by a second number that looked plausible and measured something else.
+
+---
+
+# 9. The citation check that deleted a real defect, twice
+
+**2026-08-29 and 30.** Configuration 3 scored 13 of 14 while configuration 2
+scored 14. The missing defect had been found correctly, and was deleted on its
+way out - twice, for two different reasons, both in `GroundingCheck`.
+
+The finding was right: F20's floodlight case weighs 28.4 kg against a 25 kg
+manual handling limit, delivered direct to store where there is no forklift.
+
+## First cause: a table read as a table
+
+The reviewer cited the product-list row it read the weight from:
+
+```
+reviewer quoted:   RAV-FLD-50 | LED floodlight 50W IP65 | GTIN 5033333000011 | ...
+document says:     RAV-FLD-50  LED floodlight 50W IP65  GTIN 5033333000011  case pack 8  28.4kg
+```
+
+The model read a fixed-width table as a table and re-rendered the column
+separators as pipes, then elided the tail. Every fact correct, the right
+document, and `contains()` - an exact substring match after collapsing
+whitespace - called it a fabrication, because a pipe is not whitespace.
+
+**Fix.** Separator punctuation (`| │ ¦ • · tab`) normalises to space, and an
+ellipsis means "and the rest": segments either side are matched in order.
+Deliberately narrow - commas and full stops are *not* normalised, because
+`28.4` and `284` are different weights and a clause can turn on a comma.
+`CitationMatchingTest` pins both halves, and the class that matters more is the
+one asserting what must keep failing: invented text, a paraphrase where every
+fact is true and no words match, and `284kg` never matching `28.4kg`.
+
+## Second cause, revealed by fixing the first: citing the rulebook
+
+With the quote grounding, the same finding failed on its *other* citation:
+
+```
+logistics-...-1 cites unknown document RULEBOOK
+```
+
+The finding compares a vendor value against a policy limit. The 28.4 kg comes
+from the pack; the 25 kg comes from the retailer's rulebook, which the reviewer's
+own prompt calls authoritative and hands to it directly. `GroundingCheck` only
+knows about vendor-submitted documents, so citing the authority it was told to
+use was treated as fabrication.
+
+**Every "vendor value X breaks policy limit Y" finding has this shape.** Half the
+evidence is the vendor's and half is the retailer's, and only one half was
+checkable.
+
+**Fix.** A citation naming reference data is marked unverifiable and goes to a
+human rather than being discarded.
+
+## The rule both fixes share
+
+Neither made the check more permissive about *fabrication*. F15's finding, which
+cites a document that does not exist in the pack, is still discarded - correctly,
+and it is the one removal in configuration 3 that should happen.
+
+What changed is that "I could not verify this" stopped being reported as "this is
+invented". That is the third instance of one bug in this codebase:
+
+```
+the gate         a skipped review reported identically to a clean one
+the harness      a cached latency reported identically to a measured one
+grounding        an unverifiable citation reported identically to a fabricated one
+```
+
+**Two states sharing one output, with no way to tell which.** Worth naming as a
+category, because it has now cost a missed defect, a lost measurement, and a
+deleted true finding - and none of the three threw an exception.
+
+## The weakness accepted, rather than hidden
+
+A reviewer could now evade grounding by citing "RULEBOOK" for an invented claim.
+That hole is real and it is taken deliberately: the finding is not cleared, it is
+marked unverifiable and shown to a person alongside the note that its source
+could not be checked. The alternative was deleting correct findings outright.
+
+Closing it properly means grounding against the reference text itself, which
+needs the rulebook in state *before* the first verify pass - currently only the
+`gatherMore` cycle puts it there.
 
 ---
 

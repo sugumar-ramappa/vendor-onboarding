@@ -151,21 +151,34 @@ public class ReviewGraph {
         var builder = new StateGraph<>(ReviewState.SCHEMA, ReviewState::new);
 
         // ------------------------------------------------- gate: completeness --
-        builder.addNode("completeness", async(state -> preFork(runReviewer(completeness, state))));
+        //
+        // Optional. A null gate means the reviewers run unconditionally, which
+        // configuration 4 needs: it puts the verifier behind the SINGLE agent,
+        // and the single agent is not a gate.
+        //
+        // Giving it one would silently destroy that experiment. The gate stops
+        // the pipeline on a BLOCKING finding, and the single agent's fabricated
+        // findings on a clean pack are exactly that - so the run would
+        // short-circuit before verification and measure configuration 1 again
+        // while calling itself configuration 4.
+        if (completeness != null) {
+            builder.addNode("completeness",
+                    async(state -> preFork(runReviewer(completeness, state))));
 
-        builder.addNode("requestDocuments", node_async(state -> {
-            log.info("{}: pack incomplete ({} finding(s)) - skipping the substantive "
-                            + "reviews and asking for documents",
-                    state.applicationId(), state.findings().size());
-            return Map.of(ReviewState.TRACE, "requestDocuments",
-                    ReviewState.VERDICT, "DOCUMENTS_REQUESTED");
-        }));
+            builder.addNode("requestDocuments", node_async(state -> {
+                log.info("{}: pack incomplete ({} finding(s)) - skipping the substantive "
+                                + "reviews and asking for documents",
+                        state.applicationId(), state.findings().size());
+                return Map.of(ReviewState.TRACE, "requestDocuments",
+                        ReviewState.VERDICT, "DOCUMENTS_REQUESTED");
+            }));
 
-        builder.addConditionalEdges("completeness",
-                edge_async(state -> blocksOn(state.findings()) ? "incomplete" : "complete"),
-                Map.of("incomplete", "requestDocuments", "complete", "fanOut"));
+            builder.addConditionalEdges("completeness",
+                    edge_async(state -> blocksOn(state.findings()) ? "incomplete" : "complete"),
+                    Map.of("incomplete", "requestDocuments", "complete", "fanOut"));
 
-        builder.addEdge("requestDocuments", END);
+            builder.addEdge("requestDocuments", END);
+        }
 
         // ------------------------------------------------------------ fan-out --
         builder.addNode("fanOut", node_async(state -> {
@@ -263,7 +276,7 @@ public class ReviewGraph {
                 Map.of("human", HUMAN_REVIEW_NODE, "clean", END));
 
         builder.addEdge(HUMAN_REVIEW_NODE, END);
-        builder.addEdge(START, "completeness");
+        builder.addEdge(START, completeness != null ? "completeness" : "fanOut");
         builder.addEdge("gather", "verify");
 
         var config = CompileConfig.builder()

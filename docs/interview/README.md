@@ -32,7 +32,7 @@ Also worth having open:
 >
 > Spring Boot 4, Spring AI, LangGraph4j, MCP tools over a read-only Postgres
 > role. 150 tests, no API key needed. 14 hand-written fixtures with planted
-> defects, measured across three configurations.
+> defects, measured across four configurations.
 
 ---
 

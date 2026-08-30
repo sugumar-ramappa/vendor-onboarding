@@ -1,0 +1,40 @@
+# Verifier calibration.
+#
+# A batch job like the measurement, and for the same reason it needs the same
+# two settings.
+#
+# web-application-type: none, because CommandLineRunner finishing does not end a
+# web application - Tomcat holds a non-daemon thread and the JVM never exits.
+# That cost fifteen minutes per configuration before it was noticed.
+spring:
+  main:
+    web-application-type: none
+
+server:
+  port: 0
+
+onboarding:
+  model:
+    # Off, matching the measurement. The reviewer prompts here have their
+    # rulebook pre-resolved, so a tool call would fetch what the model has
+    # already been given and cost a second billed request.
+    #
+    # This must not diverge from the measure profile. The review cache is keyed
+    # on the rendered prompt, so a reviewer built differently here would miss
+    # the cache, pay Groq to regenerate findings that are already stored, and -
+    # worse - calibrate the verifier against findings from a DIFFERENT single
+    # agent than the one whose six fabricated findings this exists to test.
+    tools-enabled: false
+
+calibrate:
+  # Clean packs. Every finding raised on one is false by construction - no
+  # labelling judgement is involved, which is what makes the set evidence.
+  #
+  # F16 is the important one: a brush vendor with hazardous = false, where the
+  # single agent produced six findings, four of them BLOCKING, demanding safety
+  # data sheets for a hazard the fixture says does not exist.
+  false-fixtures: F16,F15
+  # Defective packs. Only findings matching a planted defect are counted true;
+  # anything else might be a real problem the fixture author missed, and scoring
+  # it either way would be a guess.
+  true-fixtures: F17,F20

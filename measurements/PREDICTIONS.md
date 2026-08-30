@@ -117,3 +117,132 @@ fixture.
 - Reporting dense-pack results without the shallow-pack contrast
 
 The shallow numbers stay in the repository regardless of what the dense ones say.
+
+---
+
+# Verifier calibration, predicted 2026-08-29 before running
+
+## Why a second predictions section exists
+
+The three-configuration run finished and reported that the verifier refuted
+**zero** findings out of 48, across two runs. That reads as a result and is not
+one. Every finding it was shown was essentially correct - configuration 2 found
+14 of 14 planted defects, and its 31 clean-pack findings were all `INFO`
+confirmations. **A well-calibrated verifier shown only correct findings should
+refute nothing.** Zero is what a working verifier and a broken one both produce.
+
+This is the identical mistake `prompt-eval` had already diagnosed in its own
+judge, in its own words: *with only correct answers to grade, false accepts are
+undetectable - you cannot observe a judge waving through a wrong answer you never
+showed it.* The same blind spot, two projects apart.
+
+## The set
+
+Balanced, the way `prompt-eval`'s judge calibration was balanced.
+
+**Known-false findings.** F16 is a clean pack - a brush vendor with no hazardous
+SKU - so **every** finding raised on it is false by construction, no labelling
+judgement required. The single agent produced six there, four of them `BLOCKING`,
+including a demand for safety data sheets covering a hazard the fixture says does
+not exist (`hazardous = false`).
+
+**Known-true findings.** The findings on F17, F18 and F20 that matched planted
+defects. These are true by construction too: the fixture author planted them.
+
+## The predictions
+
+**1. The verifier refutes fewer than half the known-false findings.**
+
+Because it is the same model that produced them. `application-groq.yml` pins one
+model for every role - `openai/gpt-oss-120b` reviews, and `openai/gpt-oss-120b`
+checks the review. A model asked whether its own confident claim is wrong shares
+the blind spot that produced the claim. Self-verification is the weakest form of
+verification and this run uses it.
+
+**If it refutes most of them, this prediction is wrong and that is the finding**:
+the verifier works, it had nothing to do on the real measurement, and the honest
+report becomes "it does not ship because it insures against a failure my
+reviewers did not produce" rather than "it does not work".
+
+**2. It refutes almost none of the known-true findings.**
+
+Two runs of 48 correct findings produced zero refutations, so on this evidence
+the verifier is heavily biased toward letting things stand. That bias should
+protect true findings even if it fails to catch false ones - which is exactly the
+shape `prompt-eval` found in its v2 judge: generous, agreeable, and dangerous.
+
+**3. The two together are the actual result.** Refuting nothing and refuting
+everything are both useless. What matters is the gap between the two rates, which
+is the same reason `prompt-eval` reports false accepts and false rejects as
+separate columns rather than one agreement score.
+
+## What would make this dishonest
+
+- Reporting the false-finding rate without the true-finding rate
+- Swapping the model after seeing the result and reporting only the better run
+- Quietly widening what counts as "refuted"
+
+**If the verifier fails this, it stays in the repository.** A component that was
+built, measured and found not to work is worth more as a recorded negative than
+as a deleted mistake.
+
+---
+
+# Configuration 4, predicted 2026-08-29 before running
+
+## Why a fourth configuration exists
+
+The calibration answered the question it was built for - the verifier refuted 4
+of 6 fabricated findings and destroyed 0 of 7 true ones - but it answered it on a
+bench. The verifier was handed one finding at a time, with no grounding check in
+front of it and no `gatherMore` cycle behind it. **Configuration 4 asks the same
+question inside the real pipeline**: single agent, then verifier, exactly as
+configuration 3 does for the four specialists.
+
+The point is not to find a better architecture. It is that the calibration
+implies something specific and untested - that the verifier's value depends
+entirely on which reviewers it is attached to - and an implication is not a
+measurement.
+
+## The predictions
+
+**1. Recall stays at 10 of 14. Exactly.**
+
+`VerifierAgent` can only remove findings; it has no path that creates one. So
+configuration 4's recall is bounded above by configuration 1's, and any figure
+*higher* than 10/14 means something is wrong with the harness rather than good
+about the architecture. A number that cannot improve is the cleanest kind of
+prediction, and it is stated first so that a surprise there is read as a bug.
+
+**2. Actionable false positives fall from 6 to roughly 2.**
+
+Directly from the calibration: 4 of 6 refuted. If the pipeline does better than
+the bench it will be because `gatherMore` resolves the two that were blocked on
+missing reference data, in which case this lands nearer 0 - and that would be
+evidence the bench *understated* the verifier, which is worth knowing.
+
+**3. Configuration 2 still wins, and the reason is the finding.**
+
+10/14 with a clean output beats 10/14 with a dirty one, and loses to 14/14. So:
+**specialisation buys recall, and no guardrail recovers it.** A verifier can only
+tidy what the reviewers said - it cannot make them see what they never looked at.
+If that holds, the honest summary of this whole project is that the expensive
+architecture is worth its cost for what it *finds*, not for what it avoids
+claiming.
+
+**4. Configuration 3 reaches 14 of 14 in the same run.**
+
+Not a prediction about the architecture - a regression check on today's grounding
+fixes. Configuration 3's missing defect was never refuted by the verifier; it was
+discarded twice by the citation check, first for re-rendering a table row and
+then for citing the retailer's rulebook. Both are now fixed. **If it is still
+13/14, one of those fixes does not work** and the number is telling me so.
+
+## What would make this dishonest
+
+- Reporting configuration 4's false-positive improvement without its recall ceiling
+- Presenting it as a rival to configuration 2 when its recall cannot reach it
+- Dropping it if the false positives do not improve
+
+**Configuration 4 is predicted to lose.** It is worth running because it explains
+*why* the winner wins.

@@ -211,6 +211,27 @@ public class MeasurementRunner implements CommandLineRunner {
                             graph(completenessGate(), fourReviewers(), verifier), selectedFixtures));
         }
 
+        // 4. The cheap architecture with the expensive guardrail bolted on.
+        //
+        //    Predicted to lose, and run because it explains why the winner wins.
+        //    The verifier can only REMOVE findings, so recall is capped at
+        //    configuration 1's 10/14 - it can clean up the six fabrications the
+        //    single agent produced and it cannot recover the four defects the
+        //    single agent never looked for.
+        //
+        //    No gate, deliberately. The single agent is its own everything, the
+        //    same as in configuration 1, and giving it a gate here would
+        //    short-circuit on its own BLOCKING fabrications before the verifier
+        //    ever ran. Same agent, same prompt version, so its findings come
+        //    from cache and only the verifier calls are new.
+        if (selected.contains(4)) {
+            runNamed(results, completed, 4, "single agent + verifier",
+                    () -> harness.run("single agent + verifier",
+                            graph(null, List.of(reviewer(ReviewArea.COMPLIANCE, "single-v1")),
+                                    verifier),
+                            selectedFixtures, false));
+        }
+
         System.out.printf("%n=== results ===%n%n");
         results.forEach(r -> System.out.println("  " + r.summary() + "\n"));
 

@@ -2,6 +2,7 @@ package com.learning.onboarding.graph;
 
 import com.learning.onboarding.agents.ReviewContext;
 import com.learning.onboarding.domain.Evidence;
+import com.learning.onboarding.domain.EvidenceNeed;
 import com.learning.onboarding.domain.ReviewFinding;
 import com.learning.onboarding.domain.SubmittedDocument;
 import com.learning.onboarding.intake.ExtractionSource;
@@ -65,6 +66,23 @@ public class GroundingCheck {
             SubmittedDocument document = context.application().document(e.documentId());
 
             if (document == null) {
+                if (namesReferenceData(e.documentId())) {
+                    // Not fabrication - the reviewer is citing the retailer's own
+                    // rulebook, which its prompt calls authoritative and supplies
+                    // to it directly. It is simply not a document the VENDOR
+                    // submitted, and this check only knows about those.
+                    //
+                    // Every "vendor value X breaks policy limit Y" finding has
+                    // this shape: X comes from the pack and Y comes from the
+                    // rulebook. Discarding them cost a real defect on F20 - a
+                    // 28.4 kg case against a 25 kg manual handling limit, found
+                    // correctly and deleted for citing the limit.
+                    log.info("{} cites retailer reference data ({}), which is not part of "
+                             + "the vendor pack - sending to a human rather than discarding",
+                            finding.findingId(), e.documentId());
+                    anyUnverifiable = true;
+                    continue;
+                }
                 // A citation to a document that was never submitted. The most
                 // clear-cut form of fabrication.
                 log.warn("{} cites unknown document {}", finding.findingId(), e.documentId());
@@ -77,12 +95,68 @@ public class GroundingCheck {
             }
 
             if (!document.contains(e.quote())) {
+                // Not every failed match is a fabrication. A quote whose
+                // distinctive tokens - SKU codes, GTINs, figures - all appear in
+                // the document in order is anchored to real content that was
+                // re-rendered; a quote whose tokens are not there was invented.
+                // Those two deserve opposite treatment, and until 29 Aug they
+                // got the same one.
+                if (document.mentionsInOrder(e.quote())) {
+                    log.warn("{} cites {} with text that does not match verbatim, "
+                             + "but every distinctive term appears in order - "
+                             + "sending to a human rather than discarding: \"{}\"",
+                            finding.findingId(), e.documentId(), truncate(e.quote()));
+                    anyUnverifiable = true;
+                    continue;
+                }
                 log.warn("{} quotes text absent from {}: \"{}\"",
-                        finding.findingId(), e.documentId(),
-                        e.quote().length() > 60 ? e.quote().substring(0, 60) + "..." : e.quote());
+                        finding.findingId(), e.documentId(), truncate(e.quote()));
                 return Result.UNGROUNDED;
             }
         }
         return anyUnverifiable ? Result.UNVERIFIABLE : Result.GROUNDED;
+    }
+
+    /**
+     * Does this citation name the retailer's reference data rather than a
+     * vendor document?
+     *
+     * <p>The reviewer prompts call the rulebook authoritative and hand it over
+     * as a REFERENCE DATA block, so citing it is the correct behaviour, not a
+     * fabrication. It is matched by name because there is nothing else to match
+     * against: at the first verify pass {@code ReviewState.evidence()} is empty
+     * - only the {@code gatherMore} cycle fills it - so there is no rulebook
+     * text here to check a quote against.
+     *
+     * <p><b>The weakness, stated rather than hidden.</b> A reviewer could evade
+     * grounding entirely by citing "RULEBOOK" for an invented claim. That is a
+     * real hole and it is accepted deliberately, because the finding is not
+     * cleared - it is marked unverifiable and goes to a person, who sees both
+     * the claim and the note that its source could not be checked. The
+     * alternative was deleting correct findings outright, which is what this
+     * replaced.
+     *
+     * <p>Closing the hole properly means grounding against the reference text
+     * itself, which requires the rulebook to be in state before the first verify
+     * pass rather than after it.
+     */
+    private static boolean namesReferenceData(String documentId) {
+        if (documentId == null) {
+            return false;
+        }
+        String id = documentId.toUpperCase().replaceAll("[^A-Z]", "");
+        if (id.contains("RULEBOOK") || id.contains("REFERENCEDATA")) {
+            return true;
+        }
+        for (EvidenceNeed need : EvidenceNeed.values()) {
+            if (id.contains(need.name().replaceAll("[^A-Z]", ""))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String truncate(String quote) {
+        return quote.length() > 60 ? quote.substring(0, 60) + "..." : quote;
     }
 }

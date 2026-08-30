@@ -8,16 +8,20 @@ application pack independently. This runs those five reviews in one pass,
 reports where they **contradict each other**, and has an adversarial verifier
 try to refute every serious finding before it reaches a human.
 
-**Status: built and measured.** 64 main classes, 21 test classes, 186 tests, 20
+**Status: built and measured.** 64 main classes, 22 test classes, 198 tests, 20
 fixtures carrying 26 planted defects. The graph, the five reviewers, the
 adversarial verifier, the conflict detector, the grounding check and the MCP tool
 server all run.
 
-All three configurations are measured over the same dense fixture set —
+All four configurations are measured over the same dense fixture set —
 [`measurements/openai-gpt-oss-120b/RESULTS.md`](measurements/openai-gpt-oss-120b/RESULTS.md).
 The headline is below and it is not one-sided: **the architecture wins recall,
-and pays for it in latency** — three times slower for the same pack. The verifier
-does not currently pay for itself.
+and pays for it in latency** — three times slower for the same pack.
+
+The fourth configuration exists to say *why* the winner wins. It bolts the
+adversarial verifier onto the cheap single agent, and separates that agent's two
+different failures: **fabrication is fixable with a guardrail, blindness is
+not.**
 
 Measuring was slower than building here, and deliberately so. A configuration
 measured over a different fixture set than the one it is compared against is not
@@ -52,15 +56,22 @@ anchoring — and that claim gets measured, not asserted.
 
 ## The claim this project has to earn
 
-Three configurations, same five dense fixtures, same fourteen planted defects,
-one model. Measured 2026-08-28 on `openai/gpt-oss-120b` via Groq:
+Four configurations, same five dense fixtures, same fourteen planted defects,
+one model, on `openai/gpt-oss-120b` via Groq. Measured 28-30 August:
 
 ```
                                 fixtures   recall          FP (all)  FP (actionable)  routing   median
 1  single agent, all five areas     5      0.71  (10/14)       6            6           n/a       28 s
+4  single agent + verifier          5      0.71  (10/14)       1            1           n/a       28 s
 2  gate + four agents               5      1.00  (14/14)      31            0          1.0000     88 s
-3  gate + four agents + verifier    5      0.93  (13/14)      30            -          1.0000    180 s
+3  gate + four agents + verifier    5      1.00  (14/14)      30            0          1.0000     88 s
 ```
+
+Ordered cheapest first rather than by number, because the interesting comparison
+is 1 against 4 and 2 against 3 - what each guardrail buys the architecture below
+it. The median column is `medianCriticalPathMs`, gate plus the slowest concurrent
+reviewer; it excludes the verifier, which writes no audit entry, so 3 and 4 cost
+more wall clock than it shows.
 
 **The sample, stated plainly.** Five fixtures: F17, F18 and F20 carry the 14
 planted defects (4, 5 and 5); F15 and F16 are clean. So recall is over three
@@ -68,9 +79,6 @@ fixtures, and **every false-positive count is over two clean packs** — 31 is
 about fifteen confirmations per pack, and the single agent's 6 is three
 fabricated blocking findings per pack. Small, and the conclusions are stated
 against that.
-
-Configuration 3 predates the actionable/confirmatory split and has not been
-re-scored under it, so its second column is left blank rather than assumed.
 
 **The median column was carried in prose until 29 August, and is now recorded.**
 It had no result file behind it: a stopwatch around a fully cached re-run
@@ -128,11 +136,38 @@ slower** to find four more defects out of fourteen. Not 5×, despite five calls
 against one, because the four reviewers run concurrently on virtual threads and
 the pack waits for the slowest rather than for all of them.
 
-**The verifier does not currently justify its cost.** Across five fixtures it
-removed exactly two findings — one false positive and one genuine defect — while
-doubling median latency from 88 to 180 seconds. At this sample size that is a
-coin flip, not an improvement, and configuration 3 would not ship on this
-evidence.
+**The verifier works, and is attached to the configuration that does not need
+it.** That took three measurements to establish and the first two were
+misleading.
+
+Across configuration 3 it refuted **nothing** - 48 findings, zero overturned -
+which read as a component that does not work. It is not. The verifier only
+challenges findings at `MAJOR` or above, and configuration 2's false positives
+were *all* `INFO` confirmations, below that line. **It was never shown a single
+false finding.** Its zero was the correct answer to every question it was
+actually asked.
+
+Configuration 4 asks the other question. Bolted onto the single agent - the one
+that does fabricate at blocking severity - the same verifier takes false
+positives from **6 to 1**:
+
+```
+                       finds     wrongly blocks a clean vendor
+1  single agent        10/14                 6
+4  + verifier          10/14                 1
+```
+
+**Recall does not move, and cannot.** `VerifierAgent` has no path that creates a
+finding; it can only delete. So a guardrail cleans up what a reviewer wrongly
+said and can never make it see what it never looked at. That is the sharpest
+statement this project supports:
+
+> Fabrication is fixable with a checker. Missing things is not. Only
+> specialisation bought recall.
+
+Configuration 3 still does not ship - it matches configuration 2 exactly on both
+numbers while roughly doubling wall clock, because it is insuring against a
+failure the four specialists do not produce.
 
 ### Against the predictions
 
